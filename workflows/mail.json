@@ -1,0 +1,114 @@
+{
+  "name": "Pandora | login code delivery",
+  "nodes": [
+    {
+      "id": "trusted-mail-request",
+      "name": "Trusted mail request",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "position": [
+        0,
+        0
+      ],
+      "typeVersion": 1.1
+    },
+    {
+      "id": "validate-request",
+      "name": "Validate request",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "const b=$input.first().json; if(!b || typeof b.to!==\"string\" || !/^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@eraneos\\.com$/i.test(b.to) || !/^\\d{8}$/.test(String(b.code)) || b.purpose!==\"pandora_login\") throw new Error(\"Invalid login email payload\"); return [{json:{to:b.to,code:String(b.code)}}];"
+      },
+      "position": [
+        250,
+        0
+      ],
+      "typeVersion": 2
+    },
+    {
+      "id": "send-login-code",
+      "name": "Send login code",
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "toRecipients": "={{ $json.to }}",
+        "subject": "Your Pandora sign-in code",
+        "bodyContent": "=Your Pandora sign-in code is {{ $json.code }}. It expires in 10 minutes. If you did not request this code, ignore this email.",
+        "additionalFields": {
+          "from": "florian.liepe@eraneos.com",
+          "bodyContentType": "Text",
+          "saveToSentItems": false
+        }
+      },
+      "position": [
+        500,
+        0
+      ],
+      "typeVersion": 2,
+      "credentials": {
+        "microsoftOutlookOAuth2Api": {
+          "id": "RwBmsnNR6Poq2bIE",
+          "name": "Eraneos Outlook"
+        }
+      }
+    },
+    {
+      "id": "delivery-acknowledged",
+      "name": "Delivery acknowledged",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "return [{json:{accepted:true}}];"
+      },
+      "position": [
+        750,
+        0
+      ],
+      "typeVersion": 2
+    }
+  ],
+  "connections": {
+    "Trusted mail request": {
+      "main": [
+        [
+          {
+            "node": "Validate request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate request": {
+      "main": [
+        [
+          {
+            "node": "Send login code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send login code": {
+      "main": [
+        [
+          {
+            "node": "Delivery acknowledged",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": false,
+    "callerPolicy": "workflowsFromSameOwner"
+  }
+}

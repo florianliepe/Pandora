@@ -1,0 +1,20 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const api=JSON.parse(readFileSync(new URL('../workflows/api.json',import.meta.url),'utf8'));
+const node=name=>api.nodes.find(n=>n.name===name);
+test('deployed API definition fences writes and does not retain credentials in execution logs',()=>{
+  assert.equal(api.settings.saveDataErrorExecution,'none');
+  assert.equal(api.settings.saveDataSuccessExecution,'none');
+  assert.equal(api.settings.saveManualExecutions,false);
+  assert.equal(api.settings.executionTimeout,110);
+  assert.equal(node('API request').parameters.options.allowedOrigins,'https://florianliepe.github.io');
+  assert.deepEqual(node('Acquire lease').parameters.filters.conditions.map(c=>c.keyName),['workspace','revision','lockUntil']);
+  assert.deepEqual(node('Release lease').parameters.filters.conditions.map(c=>c.keyName),['workspace','leaseToken','revision']);
+  assert.match(node('Encode state').parameters.jsCode,/sha:\$\('Read Git state'\)/);
+  assert.match(node('Git result').parameters.jsCode,/r\.authNext=\$\('Prepare'\)/);
+  assert.match(node('Released').parameters.jsCode,/Session save conflict/);
+  assert.equal(node('Send email').parameters.options.waitForSubWorkflow,true);
+  assert.match(node('Mail result').parameters.jsCode,/\$json\.accepted===true/);
+  assert.match(node('Prepare').parameters.jsCode,/Pandora.tokenHash\(request.token/);
+});
