@@ -11,13 +11,13 @@ the Codex fix/test/review loop.
   membership and four roles, defect backlog, evidence uploads, iterations,
   test cases and versioned execution snapshots, in-app notifications, audit log,
   priority heatmap, history-based burndown, flow metrics, advisory chat adapter.
-- Frontend is deployable to GitHub Pages. Until a backend URL is configured the
-  published page explicitly shows a frontend preview and disables login.
-- Backend runs locally with SQLite; production requires PostgreSQL and private
-  Azure Blob storage. Local development mail is never exposed through the API.
-- Azure configuration is prepared, **not provisioned**, at the owner's request.
-- n8n workflow definitions are drafts. Mail requires an approved sender and
-  authenticated webhook; chat requires backend-only authentication and publication.
+- Frontend runs on GitHub Pages; the API runs in the existing Eraneos n8n service.
+- Application records and screenshots live in the private Pandora-data GitHub
+  repository. Authentication hashes and request locks stay in an n8n Data Table.
+- Outlook sends one-time login codes using the connected Eraneos Outlook account.
+  Only exact @eraneos.com addresses are permitted.
+- Local development uses SQLite. The earlier Azure deployment configuration is
+  superseded; no dedicated Azure application resources are required.
 - SSO, repository write access, automatic fix execution, pipeline ingestion and
   operational DORA measurements are phase-two work. Agentic merge is unavailable.
 
@@ -45,7 +45,7 @@ npm run test:e2e
 ```
 
 `dist` contains only static frontend assets. `PANDORA_API_URL` sets the HTTPS
-backend origin during the build. Backend secrets never enter the frontend.
+API endpoint during the build. Backend secrets never enter the frontend.
 
 ## Workflow
 
@@ -76,19 +76,18 @@ All API requests, including evidence downloads, enforce membership server-side.
 | `public/` | Responsive frontend, no framework runtime required |
 | `server/` | Express API, authentication, authorization, persistence and evidence |
 | `tests/` | API, persistence, managed-identity and browser regression tests |
-| `infra/main.bicep` | Dedicated Azure network, App Service, PostgreSQL, Blob and Key Vault |
+| `scripts/api-workflow.mjs` | Generate and deploy the GitHub-backed n8n API |
 | `workflows/` | n8n login email, advisory chat and callable context workflows |
-| `.github/workflows/` | CI, Pages and manually triggered backend deployment |
+| `.github/workflows/` | CI and GitHub Pages publication |
 | `docs/` | Deployment steps, research decisions and phase-two integration contract |
 
 ## Operational limits
 
-The initial persistence adapter keeps a versioned aggregate in one PostgreSQL
-JSONB row, using a transaction and row lock to prevent lost updates across
-instances. This is suited to a small-team pilot, not a high-volume multi-tenant
-service. Split issues, events, sessions and runs into indexed tables before
-large-scale rollout. Azure stores screenshot binaries separately; local SQLite
-keeps them inline. Screenshots are limited to 5 MB each and 10 per issue.
+The deployed API serializes requests with an n8n Data Table lease and uses GitHub
+file SHA checks to reject stale writes. This is a small-team pilot: application
+state is capped at 700 KB of UTF-8 JSON and the global budget is 6,000 requests per
+hour. Screenshots are separate private files, limited to 5 MB each and ten per
+issue. See the deployment guide for recovery and retention limitations.
 
 Records are archived, not physically purged. Audit and attachment retention,
 backup restoration and operational load tests must be agreed before a broad

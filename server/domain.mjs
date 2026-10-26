@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 export const id=()=>randomUUID();
 export const now=()=>new Date().toISOString();
 export function fail(status,message){throw Object.assign(new Error(message),{status});}
@@ -7,13 +7,13 @@ export const emailSchema=z.string().trim().toLowerCase().email().max(254).refine
 const text=z.string().trim().max(16000).default('');
 const title=z.string().trim().min(2).max(180);
 const ref=z.string().max(80).default('');
-const date=z.union([z.literal(''),z.iso.date()]).default('');
+const date=z.union([z.literal(''),z.string().date()]).default('');
 export const roles=['owner','developer','tester','viewer'];
 export const statuses=['reported','triaged','planned','in_progress','ready_for_test','verified','closed','reopened'];
 export const schemas={
   projects:z.object({name:title,description:text,repository:z.string().regex(/^$|^[\w.-]+\/[\w.-]+$/).default(''),mergePolicy:z.enum(['human','agentic']).default('human')}).strict(),
   issues:z.object({title,description:text,type:z.enum(['issue','defect','bug']).default('bug'),priority:z.enum(['critical','high','medium','low']).default('medium'),severity:z.enum(['critical','major','minor','cosmetic']).default('minor'),status:z.enum(statuses).default('reported'),ownerId:ref,iterationId:ref,steps:text,expected:text,actual:text,environment:text,mitigation:text,notes:text,testStatus:z.enum(['not_run','passed','failed','blocked']).default('not_run'),implementationStatus:z.enum(['not_started','coding','pull_request','merged','deployed']).default('not_started'),dueDate:date,estimate:z.number().int().min(0).max(1000).default(1),notify:z.boolean().default(true)}).strict(),
-  iterations:z.object({name:title,startDate:z.iso.date(),endDate:z.iso.date(),goal:text}).strict().refine(v=>v.endDate>=v.startDate,'End date must follow start date'),
+  iterations:z.object({name:title,startDate:z.string().date(),endDate:z.string().date(),goal:text}).strict().refine(v=>v.endDate>=v.startDate,'End date must follow start date'),
   cases:z.object({title,steps:text,expected:text,preconditions:text,kind:z.enum(['functional','regression','integration','smoke','acceptance']).default('functional'),issueId:ref}).strict(),
   runs:z.object({caseId:z.string().min(1),issueId:ref,iterationId:ref,result:z.enum(['passed','failed','blocked','not_run']),actual:text,environment:z.string().trim().min(1).max(200),build:z.string().trim().min(1).max(200),notes:text}).strict()
 };
@@ -41,3 +41,4 @@ export function metrics(s,p){
   const median=a=>{const b=[...a].sort((x,y)=>x-y);return b.length?(b[Math.floor((b.length-1)/2)]+b[Math.ceil((b.length-1)/2)])/2:null;};
   return {total:issues.length,open:issues.length-closed.length,critical:issues.filter(i=>i.priority==='critical'&&i.status!=='closed').length,wip:issues.filter(i=>i.status==='in_progress').length,closed:closed.length,cycleDays:median(cycles),throughput30d:closed.filter(i=>new Date(closing(i)?.at||0)>Date.now()-30*86400000).length,dora:null,doraReason:'Connect production deployment and incident events in phase two.'};
 }
+

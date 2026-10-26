@@ -1,90 +1,74 @@
-# Deployment handoff
+# GitHub Pages and n8n deployment
 
-No Azure resources have been provisioned. The user requested configuration first.
+Pandora uses GitHub Pages for static assets, the existing Eraneos n8n service for
+its API, and the private `florianliepe/Pandora-data` repository for application
+records and screenshot files. No dedicated Azure application resources are used.
 
-## Azure
+## Deployed components
 
-1. Review `infra/main.bicep` in a **dedicated** resource group. It creates a B1
-   Linux App Service plan, PostgreSQL Flexible Server B1ms, storage, private
-   networking and Key Vault. Obtain regional pricing before deployment.
-2. Compile with `az bicep build --file infra/main.bicep`. Compilation does not
-   validate subscription quota, regional availability, or runtime connectivity.
-3. Provide the PostgreSQL administrator password through a secure deployment
-   parameter or approved secret store. Do not commit a parameter file containing it.
-4. After approval, run Azure `what-if`, review the change set, then deploy. This
-   must create separate Pandora resources, not repurpose Me.IDs production assets.
-5. From a host on the VNet, create a database role `pandora_app`, grant CONNECT
-   on the dedicated `pandora` database and USAGE/CREATE on its public schema.
-   The application role must not be the PostgreSQL administrator. Its table
-   initialization is idempotent. Restrict schema CREATE after initial migration.
-6. Store a URL-encoded PostgreSQL connection string with `sslmode=verify-full`
-   under `pandora-database-url` in the created Key Vault. Use the app role.
-   If the organization uses a private CA, configure the trusted CA; never disable TLS validation.
-7. Configure the mail and optional chat secrets below. Missing Key Vault secrets
-   deliberately prevent a usable production startup. `DEV_MAILBOX` stays off.
-8. Configure GitHub OIDC federation restricted to this repository's `production`
-   environment. Grant the deployment identity access only to the Pandora app.
-   Set repository variables `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`,
-   `AZURE_SUBSCRIPTION_ID`, `AZURE_WEBAPP_NAME`. Configure required environment
-   reviewers in GitHub; a workflow environment name alone does not enforce approval.
-9. Trigger `Deploy backend (manual)`. The application uses managed identity for
-   Blob access; no storage account keys or public screenshot URLs are needed.
-10. Verify `/api/health`, real email login, isolation between two projects,
-    screenshot upload/download, logout, persistence after restart, and restoration
-    from backup. Runtime Azure verification has not been performed.
+- Frontend: https://florianliepe.github.io/Pandora/
+- API: POST https://eraneos-agentic-platform.azurewebsites.net/webhook/pandora-api-v1
+- API workflow: `zBVoVh2q6lDlRB6B`
+- Internal mail workflow: `OvGwJlAsbVMG4kQl`
+- Outlook credential: `Eraneos Outlook` (`RwBmsnNR6Poq2bIE`)
+- GitHub credential in n8n: `GitHub account` (`3V46mglu7fpoPISX`)
+- Authentication Data Table: `t2laKfcbbngX0zz1`
 
-## n8n email delivery
+These IDs are references, not credentials. OAuth tokens and GitHub tokens remain
+in n8n credential storage. The frontend contains only the public API URL.
 
-`workflows/mail.json` is an inactive draft:
+## Publish
 
-`Header-authenticated webhook → validate exact domain/code → send email → acknowledge`
+1. Run `npm ci`, `npm test`, and the browser regression suite.
+2. Run `node scripts/build-n8n.mjs` then `node scripts/api-workflow.mjs` to rebuild
+   the checked-in API workflow definition.
+3. Set `N8N_API_BASE_URL` and `N8N_API_KEY` in the deployment shell, never Git.
+   `node scripts/api-workflow.mjs --deploy` updates the workflow identified by
+   `.local/api-workflow-id`. On a new checkout put `zBVoVh2q6lDlRB6B` in that file
+   first to update the existing workflow rather than create another one.
+4. Publish the mail subworkflow before the API. It uses an internal workflow
+   trigger restricted to workflows owned by the same n8n owner; no public email
+   webhook exists. Preserve its Outlook credential binding when updating.
+5. Set repository variable `PANDORA_API_URL` to the API URL above. Dispatch
+   `Publish frontend` for the reviewed branch. This publishes assets without
+   merging a pull request. An empty API URL produces a disabled login preview.
 
-Bind an approved SMTP credential and sender address (or replace the send node
-with an approved Microsoft Outlook sender). No mail-sending node was found in
-the accessible workflow inventory during discovery. An n8n workflow still needs
-a real mail-provider credential; the AI gateway credential cannot send mail.
+The browser sends a text/plain JSON envelope `{path, method, body, token}` and
+receives `{status, body}`. This avoids cross-origin preflight; authorization still
+runs on every protected request. CORS permits only the GitHub Pages origin.
 
-Configure Header Auth with name `Authorization` and value `Bearer <random secret>`.
-Put the production webhook URL in Key Vault `pandora-mail-url` and the raw secret
-in `pandora-mail-token`. Never configure this secret in the browser.
-Execution payload saving is disabled for successful, failed and manual runs to
-avoid retaining login codes. Publish only after credential binding and a test to
-an explicitly selected recipient. No real email was sent during development.
+## Authentication and persistence
 
-## n8n assistant
+Only exact `eraneos.com` email addresses are accepted. Codes expire after ten
+minutes, allow five attempts, and can be used once. Requests are limited to five
+per account per hour, at least one minute apart. Session lifetime is eight hours.
+The UI stores its bearer token in sessionStorage; logout revokes the stored hash.
 
-`workflows/chat.json` uses Chat Trigger → AI Agent → Eraneos gateway, with a
-**Call n8n Workflow Tool** connected to the scoped context sub-workflow.
-The fixed tool input comes from the authenticated backend request, not from
-model-selected project identifiers. The backend checks project access first.
+Hashed codes, hashed sessions, and the request budget are stored in n8n's Data
+Table, never Git. The n8n Crypto node generates fresh entropy; the bundled runtime
+uses SHA-256 with a counter to derive random values. n8n execution payload saving
+is disabled on both API and mail workflows; Outlook sent-item copies are disabled
+for login messages. Inbox delivery remains subject to the mailbox's retention.
 
-Bind the gateway credential and an HTTP Basic Auth credential. Set Key Vault
-`pandora-chat-url` to the production Chat Trigger URL and `pandora-chat-auth` to
-`username:password`. Publish the context workflow, then the chat workflow and
-enable its public webhook with Basic Auth. Only the backend holds the credential.
-The public GitHub Pages bundle must never call this endpoint directly.
+A conditional Data Table update acquires a 120-second request lease. A losing
+request receives 409 and should retry. GitHub file SHA checks independently reject
+stale state writes. The workflow times out after 110 seconds; an abandoned lease
+expires automatically. Authentication updates are saved before a session token is
+returned. Project data must commit successfully before authentication changes
+from that operation are accepted.
 
-The initial agent is advisory only. It receives at most 100 scoped issue summaries
-and cannot change records, run shell commands, merge PRs or deploy. Screenshot
-analysis and writes require the phase-two job contracts. Validate model access
-against the selected gateway credential before publication.
+GitHub `state.json` is capped at 700 KB of UTF-8 JSON for this pilot. Screenshot
+files are stored separately, limited to 5 MB each and ten per issue. A failed
+state write following an evidence upload can leave an unreferenced evidence file;
+clean these up only after checking current state and retention needs. Archived
+records and old screenshot versions remain in Git history. Repository access
+must remain private; do not enable Pages on the data repository.
 
-## GitHub Pages
+The global API budget is 6,000 accepted requests per hour. This serialized,
+Git-backed design is a small-team pilot. Use a transactional database if usage,
+retention, or reporting requirements exceed these limits. Back up the n8n Data
+Table as well as the Git repository; restoring Git alone does not restore sessions.
 
-Enable Pages with source `GitHub Actions`. Set `PANDORA_API_URL` to the deployed
-HTTPS API origin, then run `Publish frontend`. The API's `PUBLIC_ORIGIN` is
-`https://florianliepe.github.io` (origins contain no repository path).
-
-Before the API is configured, Pages publishes a clearly labelled preview with
-login disabled. It contains no project records or credentials. GitHub Pages
-serves the frontend shell publicly; email login protects application data through
-the API. If the HTML itself must be restricted, use an authenticated hosting layer.
-
-## Before organization-wide use
-
-- Validate PostgreSQL and Blob restore procedures and establish retention/purge policy.
-- Add production monitoring, distributed abuse controls and mail delivery alerts.
-- Load-test expected issue, event and attachment volume; normalize the aggregate
-  schema before its size or write-lock contention becomes significant.
-- Run Azure connectivity, managed-identity and email smoke tests in the deployed environment.
-- Record approved sender ownership and operational support responsibilities.
+The old Azure infrastructure files are superseded reference material, not the
+current deployment path. Advisory AI chat and repository fix/merge automation are
+not enabled by this API. Human approval remains mandatory for future fixes.

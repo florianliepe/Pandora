@@ -1,0 +1,58 @@
+import {readFile,writeFile} from 'node:fs/promises';
+const bundle=await readFile('.local/n8n-runtime.js','utf8');
+const table='t2laKfcbbngX0zz1',repo='https://api.github.com/repos/florianliepe/Pandora-data';
+const nodes=[],connections={};
+const add=(name,type,parameters,typeVersion=2,extra={})=>{nodes.push({id:name.toLowerCase().replaceAll(' ','-'),name,type,typeVersion,position:[nodes.length%6*240,Math.floor(nodes.length/6)*240],parameters,...extra});return name;};
+const code=(name,js)=>add(name,'n8n-nodes-base.code',{jsCode:js});
+const link=(from,to,branch=0)=>{connections[from]??={main:[]};connections[from].main[branch]??=[];connections[from].main[branch].push({node:to,type:'main',index:0});};
+const flag=(name,key)=>add(name,'n8n-nodes-base.if',{conditions:{options:{caseSensitive:true,typeValidation:'strict',version:2},conditions:[{id:key,leftValue:`={{ !!$json.${key} }}`,rightValue:true,operator:{type:'boolean',operation:'true',singleValue:true}}],combinator:'and'},options:{}},2.2);
+const dt=(name,operation,filters,values)=>add(name,'n8n-nodes-base.dataTable',{operation,dataTableId:{__rl:true,mode:'id',value:table},matchType:'allConditions',filters:{conditions:filters},...(values?{columns:{mappingMode:'defineBelow',value:values,matchingColumns:[],schema:[],attemptToConvertTypes:false,convertFieldsToString:false}}:{returnAll:true}),options:{}},1,{alwaysOutputData:true,onError:'continueRegularOutput'});
+const condition=(keyName,keyValue)=>({keyName,condition:'eq',keyValue});
+const http=(name,method,url,jsonBody)=>add(name,'n8n-nodes-base.httpRequest',{method,url,authentication:'predefinedCredentialType',nodeCredentialType:'githubApi',sendHeaders:true,headerParameters:{parameters:[{name:'Accept',value:'application/vnd.github+json'},{name:'X-GitHub-Api-Version',value:'2022-11-28'}]},...(jsonBody?{sendBody:true,specifyBody:'json',jsonBody}:{}),options:{timeout:20000,response:{response:{fullResponse:true,neverError:true,responseFormat:'json'}}}},4.2,{credentials:{githubApi:{id:'3V46mglu7fpoPISX',name:'GitHub account'}},onError:'continueRegularOutput'});
+add('API request','n8n-nodes-base.webhook',{httpMethod:'POST',path:'pandora-api-v1',responseMode:'responseNode',options:{allowedOrigins:'https://florianliepe.github.io'}},2,{webhookId:'pandora-api-v1'});
+add('Entropy','n8n-nodes-base.crypto',{action:'generate',dataPropertyName:'entropy',encodingType:'hex',stringLength:64},1);
+dt('Read authentication','get',[condition('workspace','main')]);
+code('Prepare',bundle+`\nconst row=$json,w=$('API request').first().json;const respond=(status,error)=>[{json:{response:{status,body:{error}},ready:false}}];
+let request;try{request=typeof w.body==='string'?JSON.parse(w.body):w.body;}catch{return respond(400,'Invalid JSON');}
+if(!request||typeof request.path!=='string'||!/^\\/[a-zA-Z0-9_/-]+$/.test(request.path)||request.path.length>250||!['GET','POST','PUT','DELETE'].includes(request.method||'GET')||JSON.stringify(request).length>7500000)return respond(400,'Invalid request');
+const origin=w.headers?.origin;if(origin&&origin!=='https://florianliepe.github.io')return respond(403,'Origin not allowed');
+if(request.path==='/health')return [{json:{ready:false,response:{status:200,body:{status:'ok',mailReady:true,storage:'github-private-repository',agentReady:false}}}}];
+if(!row.payload)return respond(503,'Authentication store unavailable');
+if(row.lockUntil>Date.now())return respond(409,'Another request is saving. Please retry shortly.');
+let auth;try{auth=JSON.parse(row.payload);}catch{return respond(503,'Authentication store unavailable');}
+if(typeof request.token!=='undefined'&&(typeof request.token!=='string'||request.token.length>256))return respond(400,'Invalid session');
+if(!['/auth/request','/auth/verify'].includes(request.path)&&!(auth.sessions||[]).some(s=>s.hash===Pandora.tokenHash(request.token||'')&&s.expires>Date.now()))return respond(401,'Please sign in');
+const hour=Math.floor(Date.now()/3600000);const budget=auth.budget?.hour===hour?auth.budget:{hour,count:0};if(budget.count>=6000)return respond(429,'Service request limit reached. Please try later.');auth.budget={hour,count:budget.count+1};
+return [{json:{ready:true,row,auth,request,entropy:$('Entropy').first().json.entropy,leaseToken:$('Entropy').first().json.entropy,revision:row.revision+1,lockUntil:Date.now()+120000}}];`);
+flag('Request ready','ready');
+dt('Acquire lease','update',[condition('workspace','main'),condition('revision','={{ $("Prepare").first().json.row.revision }}'),condition('lockUntil','={{ $("Prepare").first().json.row.lockUntil }}')],{revision:'={{ $("Prepare").first().json.revision }}',lockUntil:'={{ $("Prepare").first().json.lockUntil }}',leaseToken:'={{ $("Prepare").first().json.leaseToken }}'});
+code('Check lease',`const p=$('Prepare').first().json;return [{json:{acquired:$json.leaseToken===p.leaseToken,response:{status:409,body:{error:'Another request is saving. Please retry shortly.'}}}}];`);
+flag('Lease acquired','acquired');
+http('Read Git state','GET',repo+'/contents/state.json?ref=main');
+code('Apply request',bundle+`\nconst p=$('Prepare').first().json;let result;if($json.statusCode!==200||!$json.body?.content){result={response:{status:503,body:{error:'Private data repository unavailable'}},authNext:p.auth,writeGit:false};}else{try{const snapshot=JSON.parse(Buffer.from($json.body.content,'base64').toString('utf8'));result=await Pandora.run({snapshot,auth:p.auth,request:p.request,entropy:p.entropy,config:{mailReady:true,agentReady:false}});}catch{result={response:{status:503,body:{error:'Unable to process request'}},authNext:p.auth,writeGit:false};}}return [{json:result}];`);
+flag('Has upload','pendingUpload');
+http('Write evidence','PUT','='+repo+'/contents/evidence/{{ $("Apply request").first().json.pendingUpload.name }}.bin',`={{ {message:'Store private test evidence',content:$('Apply request').first().json.pendingUpload.data,branch:'main'} }}`);
+code('Upload result',`const r=$('Apply request').first().json;if($json.statusCode===201&&$json.body?.content?.sha){const a=r.snapshot.attachments.find(x=>x.id===r.pendingUpload.name);a.blobSha=$json.body.content.sha;}else{r.response={status:503,body:{error:'Unable to store screenshot'}};r.writeGit=false;r.pendingMail=null;}return [{json:r}];`);
+flag('Has download','download');
+http('Read evidence','GET','='+repo+'/git/blobs/{{ $("Apply request").first().json.download.sha }}');
+code('Download result',`const r=$('Apply request').first().json;r.response=$json.statusCode===200?{status:200,body:{file:{data:$json.body.content,name:r.download.name,type:r.download.type}}}:{status:503,body:{error:'Unable to load screenshot'}};return [{json:r}];`);
+flag('Persist Git','writeGit');
+code('Encode state',`const r=$json;return [{json:{...r,gitBody:{message:'Update Pandora application state',branch:'main',sha:$('Read Git state').first().json.body.sha,content:Buffer.from(JSON.stringify(r.snapshot)).toString('base64')}}}];`);
+http('Write Git state','PUT',repo+'/contents/state.json','={{ JSON.stringify($json.gitBody) }}');
+code('Git result',`const r=$('Persist Git').first().json;if(![200,201].includes($json.statusCode)){r.response={status:$json.statusCode===409||$json.statusCode===422?409:503,body:{error:'Unable to save project data. Reload before retrying.'}};r.authNext=$('Prepare').first().json.auth;r.pendingMail=null;}return [{json:r}];`);
+code('Prepare release',`return [{json:$json}];`);
+dt('Release lease','update',[condition('workspace','main'),condition('leaseToken','={{ $("Prepare").first().json.leaseToken }}'),condition('revision','={{ $("Prepare").first().json.revision }}')],{revision:'={{ $("Prepare").first().json.revision + 1 }}',lockUntil:0,leaseToken:'',payload:'={{ JSON.stringify($("Prepare release").first().json.authNext) }}'});
+code('Released',`const r=$('Prepare release').first().json;if(!$json.payload||$json.revision!==$('Prepare').first().json.revision+1)return [{json:{response:{status:409,body:{error:'Session save conflict. Please retry.'}}}}];return [{json:r}];`);
+flag('Deliver mail','pendingMail');
+add('Send email','n8n-nodes-base.executeWorkflow',{source:'database',workflowId:{__rl:true,mode:'id',value:'OvGwJlAsbVMG4kQl'},workflowInputs:{mappingMode:'defineBelow',value:{to:'={{ $json.pendingMail.to }}',code:'={{ $json.pendingMail.code }}',purpose:'pandora_login'},matchingColumns:[],schema:[],attemptToConvertTypes:false,convertFieldsToString:false},options:{waitForSubWorkflow:true}},1.2,{onError:'continueRegularOutput'});
+code('Mail result',`const r=$('Released').first().json;return [{json:{response:$json.accepted===true?r.response:{status:503,body:{error:'Unable to deliver login code. Please try later.'}}}}];`);
+add('Respond','n8n-nodes-base.respondToWebhook',{respondWith:'json',responseBody:'={{ $json.response }}',options:{responseHeaders:{entries:[{name:'Cache-Control',value:'no-store'},{name:'Access-Control-Allow-Origin',value:'https://florianliepe.github.io'}]}}},1.4);
+for(const [a,b,n] of [['API request','Entropy'],['Entropy','Read authentication'],['Read authentication','Prepare'],['Prepare','Request ready'],['Request ready','Acquire lease',0],['Request ready','Respond',1],['Acquire lease','Check lease'],['Check lease','Lease acquired'],['Lease acquired','Read Git state',0],['Lease acquired','Respond',1],['Read Git state','Apply request'],['Apply request','Has upload'],['Has upload','Write evidence',0],['Has upload','Has download',1],['Write evidence','Upload result'],['Upload result','Persist Git'],['Has download','Read evidence',0],['Has download','Persist Git',1],['Read evidence','Download result'],['Download result','Prepare release'],['Persist Git','Encode state',0],['Encode state','Write Git state'],['Persist Git','Prepare release',1],['Write Git state','Git result'],['Git result','Prepare release'],['Prepare release','Release lease'],['Release lease','Released'],['Released','Deliver mail'],['Deliver mail','Send email',0],['Deliver mail','Respond',1],['Send email','Mail result'],['Mail result','Respond']])link(a,b,n||0);
+const w={name:'Pandora | GitHub API',nodes,connections,settings:{executionOrder:'v1',saveDataErrorExecution:'none',saveDataSuccessExecution:'none',saveManualExecutions:false,executionTimeout:110}};
+await writeFile('workflows/api.json',JSON.stringify(w,null,2)+'\n');
+if(process.argv.includes('--deploy')){
+ const base=process.env.N8N_API_BASE_URL.replace(/\/$/,''),headers={'X-N8N-API-KEY':process.env.N8N_API_KEY,'Content-Type':'application/json'};
+ const req=async(path,method='GET',body)=>{const r=await fetch(base+'/api/v1'+path,{method,headers,body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(30000)});if(!r.ok)throw new Error('n8n '+r.status+' '+(await r.text()).slice(0,300));return r.json();};
+ let id;try{id=(await readFile('.local/api-workflow-id','utf8')).trim();}catch{}
+ const saved=await req('/workflows'+(id?'/'+id:''),id?'PUT':'POST',w);id=saved.id;await writeFile('.local/api-workflow-id',id);await req('/workflows/'+id+'/activate','POST',{});console.log(JSON.stringify({id,active:true}));
+}

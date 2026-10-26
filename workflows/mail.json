@@ -1,36 +1,25 @@
 {
-  "name": "Pandora | login code delivery (configure sender)",
+  "name": "Pandora | login code delivery",
   "nodes": [
     {
-      "id": "authenticated-mail-request",
-      "name": "Authenticated mail request",
-      "type": "n8n-nodes-base.webhook",
+      "id": "trusted-mail-request",
+      "name": "Trusted mail request",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
       "parameters": {
-        "httpMethod": "POST",
-        "path": "pandora-login-code",
-        "authentication": "headerAuth",
-        "responseMode": "lastNode",
-        "options": {}
+        "inputSource": "passthrough"
       },
       "position": [
         0,
         0
       ],
-      "typeVersion": 2,
-      "webhookId": "pandora-login-code",
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "CONFIGURE_MAIL_AUTH",
-          "name": "Pandora mail webhook authentication"
-        }
-      }
+      "typeVersion": 1.1
     },
     {
       "id": "validate-request",
       "name": "Validate request",
       "type": "n8n-nodes-base.code",
       "parameters": {
-        "jsCode": "const b=$input.first().json.body; if(!b || typeof b.to!==\"string\" || !/^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@eraneos\\.com$/i.test(b.to) || !/^\\d{8}$/.test(String(b.code)) || b.purpose!==\"pandora_login\") throw new Error(\"Invalid login email payload\"); return [{json:{to:b.to,code:String(b.code)}}];"
+        "jsCode": "const b=$input.first().json; if(!b || typeof b.to!==\"string\" || !/^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@eraneos\\.com$/i.test(b.to) || !/^\\d{8}$/.test(String(b.code)) || b.purpose!==\"pandora_login\") throw new Error(\"Invalid login email payload\"); return [{json:{to:b.to,code:String(b.code)}}];"
       },
       "position": [
         250,
@@ -41,26 +30,28 @@
     {
       "id": "send-login-code",
       "name": "Send login code",
-      "type": "n8n-nodes-base.emailSend",
+      "type": "n8n-nodes-base.microsoftOutlook",
       "parameters": {
-        "fromEmail": "CONFIGURE_APPROVED_SENDER",
-        "toEmail": "={{ $json.to }}",
+        "resource": "message",
+        "operation": "send",
+        "toRecipients": "={{ $json.to }}",
         "subject": "Your Pandora sign-in code",
-        "emailFormat": "text",
-        "text": "=Your Pandora sign-in code is {{ $json.code }}. It expires in 10 minutes. If you did not request this code, ignore this email.",
-        "options": {
-          "appendAttribution": false
+        "bodyContent": "=Your Pandora sign-in code is {{ $json.code }}. It expires in 10 minutes. If you did not request this code, ignore this email.",
+        "additionalFields": {
+          "from": "florian.liepe@eraneos.com",
+          "bodyContentType": "Text",
+          "saveToSentItems": false
         }
       },
       "position": [
         500,
         0
       ],
-      "typeVersion": 2.1,
+      "typeVersion": 2,
       "credentials": {
-        "smtp": {
-          "id": "CONFIGURE_SMTP_CREDENTIAL",
-          "name": "Approved Eraneos email sender"
+        "microsoftOutlookOAuth2Api": {
+          "id": "RwBmsnNR6Poq2bIE",
+          "name": "Eraneos Outlook"
         }
       }
     },
@@ -79,7 +70,7 @@
     }
   ],
   "connections": {
-    "Authenticated mail request": {
+    "Trusted mail request": {
       "main": [
         [
           {
@@ -117,6 +108,7 @@
     "executionOrder": "v1",
     "saveDataErrorExecution": "none",
     "saveDataSuccessExecution": "none",
-    "saveManualExecutions": false
+    "saveManualExecutions": false,
+    "callerPolicy": "workflowsFromSameOwner"
   }
 }
