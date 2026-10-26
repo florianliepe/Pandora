@@ -71,7 +71,7 @@ export function createApp({store,env=process.env,deliverMail}={}){
   });
   app.put('/api/projects/:projectId',async(req,res)=>{
     const {version,...raw}=req.body;const data=schemas.projects.parse(raw);
-    const result=await store.change(s=>{const p=req.params.projectId;permit(s,p,req.user.id,['owner']);const old=s.projects.find(x=>x.id===p);if(old.version!==version)fail(409,'Project changed; reload before saving');if(data.mergePolicy==='agentic'&&env.ENABLE_AGENTIC_MERGE!=='true')fail(409,'Agentic merge is unavailable until phase-two checks and repository protection are configured');const before={...old};Object.assign(old,data,{version:old.version+1,updatedAt:now()});audit(s,p,req.user.id,'project.updated',p,before,old);return old;});res.json(result);
+    const result=await store.change(s=>{const p=req.params.projectId;permit(s,p,req.user.id,['owner']);const old=s.projects.find(x=>x.id===p);if(old.version!==version)fail(409,'Project changed; reload before saving');if(data.mergePolicy==='agentic')fail(409,'Agentic merge is unavailable until phase-two checks and repository protection are implemented');const before={...old};Object.assign(old,data,{version:old.version+1,updatedAt:now()});audit(s,p,req.user.id,'project.updated',p,before,old);return old;});res.json(result);
   });
   app.delete('/api/projects/:projectId',async(req,res)=>{await store.change(s=>{const p=req.params.projectId;permit(s,p,req.user.id,['owner']);const item=s.projects.find(x=>x.id===p);item.deletedAt=now();audit(s,p,req.user.id,'project.archived',p);});res.json({ok:true});});
   app.post('/api/projects/:projectId/members',async(req,res)=>{

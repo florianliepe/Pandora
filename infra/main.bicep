@@ -69,7 +69,7 @@ resource evidence 'Microsoft.Storage/storageAccounts/blobServices/containers@202
   properties: {publicAccess: 'None'}
 }
 resource blobDns 'Microsoft.Network/privateDnsZones@2024-06-01' = {
-  name: 'privatelink.blob.core.windows.net'
+  name: 'privatelink.blob.${environment().suffixes.storage}'
   location: 'global'
 }
 resource blobDnsLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2024-06-01' = {
@@ -125,7 +125,7 @@ resource app 'Microsoft.Web/sites@2023-12-01' = {
         {name: 'HOST', value: '0.0.0.0'}
         {name: 'PUBLIC_ORIGIN', value: frontendOrigin}
         {name: 'DATABASE_URL', value: '@Microsoft.KeyVault(SecretUri=${vault.properties.vaultUri}secrets/pandora-database-url/)'}
-        {name: 'ATTACHMENT_CONTAINER_URL', value: 'https://${storage.name}.blob.core.windows.net/evidence'}
+        {name: 'ATTACHMENT_CONTAINER_URL', value: '${storage.properties.primaryEndpoints.blob}evidence'}
         {name: 'MAIL_WEBHOOK_URL', value: '@Microsoft.KeyVault(SecretUri=${vault.properties.vaultUri}secrets/pandora-mail-url/)'}
         {name: 'MAIL_WEBHOOK_TOKEN', value: '@Microsoft.KeyVault(SecretUri=${vault.properties.vaultUri}secrets/pandora-mail-token/)'}
         {name: 'N8N_CHAT_URL', value: '@Microsoft.KeyVault(SecretUri=${vault.properties.vaultUri}secrets/pandora-chat-url/)'}
