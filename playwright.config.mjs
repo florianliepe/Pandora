@@ -1,3 +1,2 @@
 import {defineConfig} from '@playwright/test';
 export default defineConfig({testDir:'./tests/browser',workers:1,fullyParallel:false,reporter:[['list'],['html',{open:'never'}]],use:{...(process.env.PLAYWRIGHT_CHANNEL?{channel:process.env.PLAYWRIGHT_CHANNEL}:{}),baseURL:'http://127.0.0.1:4174',trace:'retain-on-failure',screenshot:'only-on-failure'},webServer:{command:'node server/index.mjs',url:'http://127.0.0.1:4174/api/health',reuseExistingServer:false,env:{PORT:'4174',HOST:'127.0.0.1',NODE_ENV:'test',PUBLIC_ORIGIN:'http://127.0.0.1:4174',DATA_DIR:'.local/e2e',DEV_MAILBOX:'true'}}});
-

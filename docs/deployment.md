@@ -30,8 +30,10 @@ in n8n credential storage. The frontend contains only the public API URL.
    trigger restricted to workflows owned by the same n8n owner; no public email
    webhook exists. Preserve its Outlook credential binding when updating.
 5. Set repository variable `PANDORA_API_URL` to the API URL above. Dispatch
-   `Publish frontend` for the reviewed branch. This publishes assets without
-   merging a pull request. An empty API URL produces a disabled login preview.
+   `Publish frontend` from `main`. The Pages environment permits only `main`.
+   Until the full application PR is merged, publish the tested `public/` assets
+   and `scripts/build.mjs` to `main` through the frontend release path. Keep the
+   Pages branch restriction in place. An empty API URL disables login.
 
 The browser sends a text/plain JSON envelope `{path, method, body, token}` and
 receives `{status, body}`. This avoids cross-origin preflight; authorization still

@@ -21,4 +21,3 @@ export async function applyRequest({snapshot,auth,request,config={}}){
   if(Buffer.byteLength(JSON.stringify(state),'utf8')>700_000)return {response:{status:413,body:{error:'Pilot record capacity reached; contact the owner'}},authNext:auth,writeGit:false,pendingMail:null,pendingUpload:null,pendingChat:null,download:null};
   return {response,authNext,snapshot:state,writeGit:JSON.stringify(state)!==original,pendingMail,pendingUpload,pendingChat,download};
 }
-

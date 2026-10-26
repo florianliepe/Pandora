@@ -23,4 +23,3 @@ export function createApp({store,env=process.env,deliverMail}={}){
   app.use((err,_req,res,_next)=>{const status=err instanceof z.ZodError?400:err.status||500;res.status(status).json({error:err instanceof z.ZodError?err.issues.map(i=>`${i.path.join('.')}: ${i.message}`).join('; '):status===500?'Unexpected server error':err.message});});
   return app;
 }
-

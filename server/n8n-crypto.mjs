@@ -8,4 +8,3 @@ export function randomBytes(length){if(!entropy)throw new Error('Entropy not ini
 export function randomInt(min,max){const range=max-min,limit=Math.floor(4294967296/range)*range;let n;do{n=randomBytes(4).readUInt32BE(0);}while(n>=limit);return min+n%range;}
 export function randomUUID(){const b=randomBytes(16);b[6]=(b[6]&15)|64;b[8]=(b[8]&63)|128;const h=b.toString('hex');return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`;}
 export function timingSafeEqual(a,b){if(a.length!==b.length)return false;let difference=0;for(let i=0;i<a.length;i++)difference|=a[i]^b[i];return difference===0;}
-

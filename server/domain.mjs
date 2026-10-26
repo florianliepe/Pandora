@@ -41,4 +41,3 @@ export function metrics(s,p){
   const median=a=>{const b=[...a].sort((x,y)=>x-y);return b.length?(b[Math.floor((b.length-1)/2)]+b[Math.ceil((b.length-1)/2)])/2:null;};
   return {total:issues.length,open:issues.length-closed.length,critical:issues.filter(i=>i.priority==='critical'&&i.status!=='closed').length,wip:issues.filter(i=>i.status==='in_progress').length,closed:closed.length,cycleDays:median(cycles),throughput30d:closed.filter(i=>new Date(closing(i)?.at||0)>Date.now()-30*86400000).length,dora:null,doraReason:'Connect production deployment and incident events in phase two.'};
 }
-
