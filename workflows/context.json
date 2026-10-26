@@ -1,0 +1,50 @@
+{
+  "name": "Pandora | read scoped issue context",
+  "nodes": [
+    {
+      "id": "called-by-agent",
+      "name": "Called by agent",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "position": [
+        0,
+        0
+      ],
+      "typeVersion": 1.1
+    },
+    {
+      "id": "return-scoped-context",
+      "name": "Return scoped context",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "const raw = $input.first().json.context; const c = typeof raw === \"string\" ? JSON.parse(raw) : raw; if (!c || c.mode !== \"advisory\" || !c.projectId) throw new Error(\"Authenticated project context required\"); return [{json:{project:c.project,issues:c.issues || [],mode:\"advisory\",canMutate:false}}];"
+      },
+      "position": [
+        250,
+        0
+      ],
+      "typeVersion": 1
+    }
+  ],
+  "connections": {
+    "Called by agent": {
+      "main": [
+        [
+          {
+            "node": "Return scoped context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": false
+  }
+}

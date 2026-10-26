@@ -1,4 +1,4 @@
-name: Publish frontend preview
+name: Publish frontend
 on:
   push:
     branches: [main]
@@ -11,21 +11,30 @@ concurrency:
   group: pages
   cancel-in-progress: true
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
-      - run: |
-          mkdir dist
-          cp -r public/. dist/
-          echo 'window.PANDORA_CONFIG = {apiBase:"",deploymentReady:false};' > dist/config.js
-          touch dist/.nojekyll
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+        env:
+          PANDORA_API_URL: ${{ vars.PANDORA_API_URL }}
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
-      - id: deployment
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy
+        id: deployment
         uses: actions/deploy-pages@v4

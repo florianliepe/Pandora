@@ -1,0 +1,122 @@
+{
+  "name": "Pandora | login code delivery (configure sender)",
+  "nodes": [
+    {
+      "id": "authenticated-mail-request",
+      "name": "Authenticated mail request",
+      "type": "n8n-nodes-base.webhook",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "pandora-login-code",
+        "authentication": "headerAuth",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "position": [
+        0,
+        0
+      ],
+      "typeVersion": 2,
+      "webhookId": "pandora-login-code",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "CONFIGURE_MAIL_AUTH",
+          "name": "Pandora mail webhook authentication"
+        }
+      }
+    },
+    {
+      "id": "validate-request",
+      "name": "Validate request",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "const b=$input.first().json.body; if(!b || typeof b.to!==\"string\" || !/^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@eraneos\\.com$/i.test(b.to) || !/^\\d{8}$/.test(String(b.code)) || b.purpose!==\"pandora_login\") throw new Error(\"Invalid login email payload\"); return [{json:{to:b.to,code:String(b.code)}}];"
+      },
+      "position": [
+        250,
+        0
+      ],
+      "typeVersion": 2
+    },
+    {
+      "id": "send-login-code",
+      "name": "Send login code",
+      "type": "n8n-nodes-base.emailSend",
+      "parameters": {
+        "fromEmail": "CONFIGURE_APPROVED_SENDER",
+        "toEmail": "={{ $json.to }}",
+        "subject": "Your Pandora sign-in code",
+        "emailFormat": "text",
+        "text": "=Your Pandora sign-in code is {{ $json.code }}. It expires in 10 minutes. If you did not request this code, ignore this email.",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "position": [
+        500,
+        0
+      ],
+      "typeVersion": 2.1,
+      "credentials": {
+        "smtp": {
+          "id": "CONFIGURE_SMTP_CREDENTIAL",
+          "name": "Approved Eraneos email sender"
+        }
+      }
+    },
+    {
+      "id": "delivery-acknowledged",
+      "name": "Delivery acknowledged",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "return [{json:{accepted:true}}];"
+      },
+      "position": [
+        750,
+        0
+      ],
+      "typeVersion": 2
+    }
+  ],
+  "connections": {
+    "Authenticated mail request": {
+      "main": [
+        [
+          {
+            "node": "Validate request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate request": {
+      "main": [
+        [
+          {
+            "node": "Send login code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send login code": {
+      "main": [
+        [
+          {
+            "node": "Delivery acknowledged",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": false
+  }
+}
