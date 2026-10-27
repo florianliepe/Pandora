@@ -1,0 +1,23 @@
+import {readFile,writeFile} from 'node:fs/promises';
+import {rollup} from 'rollup';
+const bundle=await rollup({input:'server/pipelines.mjs'});const {output}=await bundle.generate({format:'iife',name:'Pipelines'});await bundle.close();const core=output[0].code;
+const storeId=(await readFile('.local/quality-store-id','utf8')).trim(),nodes=[],connections={};
+const node=(name,type,parameters,typeVersion=2,extra={})=>nodes.push({id:name.toLowerCase().replaceAll(' ','-'),name,type,parameters,typeVersion,position:[nodes.length%5*260,Math.floor(nodes.length/5)*240],...extra});
+const code=(name,jsCode)=>node(name,'n8n-nodes-base.code',{jsCode});
+const edge=(a,b)=>{connections[a]={main:[[{node:b,type:'main',index:0}]]};};
+const call=(name,path,body)=>node(name,'n8n-nodes-base.executeWorkflow',{source:'database',workflowId:{__rl:true,mode:'id',value:storeId},workflowInputs:{mappingMode:'defineBelow',value:{path,method:'POST',...(body?{body}:{})},matchingColumns:[],schema:[],attemptToConvertTypes:false,convertFieldsToString:false},options:{waitForSubWorkflow:true}},1.2);
+const http=name=>node(name,'n8n-nodes-base.httpRequest',{url:'={{ $json.url }}',authentication:'predefinedCredentialType',nodeCredentialType:'githubApi',sendHeaders:true,headerParameters:{parameters:[{name:'Accept',value:'application/vnd.github+json'},{name:'X-GitHub-Api-Version',value:'2022-11-28'}]},options:{timeout:15000,response:{response:{fullResponse:true,neverError:true,responseFormat:'json'}}}},4.2,{credentials:{githubApi:{id:'3V46mglu7fpoPISX',name:'GitHub account'}},onError:'continueRegularOutput'});
+node('Every five minutes','n8n-nodes-base.scheduleTrigger',{rule:{interval:[{field:'minutes',minutesInterval:5}]}},1.2);
+node('Internal trigger','n8n-nodes-base.executeWorkflowTrigger',{inputSource:'passthrough'},1.1);
+call('Get targets','/automation/pipelines/targets');
+code('Initial requests',core+`\nif($json.status!==200)throw Error('Pipeline target store unavailable');if(!$json.body.targets.length)return [];return Pipelines.initialRequests().map(json=>({json}));`);
+http('Read GitHub metadata');
+code('Detail requests',core+`\nconst requests=$('Initial requests').all();if(requests.length!==$input.all().length)throw Error('GitHub response count mismatch');const initial=$input.all().map((x,i)=>({...requests[i].json,status:x.json.statusCode||0,body:x.json.body||{}}));const details=Pipelines.detailRequests(initial);return (details.length?details:[{kind:'empty',url:'https://api.github.com/repos/florianliepe/meids-app'}]).map(json=>({json:{...json,initial}}));`);
+http('Read jobs and UAT');
+code('Prepare observation',`const requests=$('Detail requests').all();if(requests.length!==$input.all().length)throw Error('GitHub response count mismatch');const details=$input.all().map((x,i)=>{const {initial,...r}=requests[i].json;return {...r,status:x.json.statusCode||0,body:x.json.body||{}};});return [{json:{...$('Get targets').first().json.body,initial:requests[0].json.initial,details}}];`);
+call('Save observation','/automation/pipelines/complete','={{ $json }}');
+code('Check save',`if($json.status!==200)throw Error('Pipeline observation was not saved; next scheduled poll will retry');return [{json:{applied:$json.body.applied}}];`);
+for(const [a,b] of [['Every five minutes','Get targets'],['Internal trigger','Get targets'],['Get targets','Initial requests'],['Initial requests','Read GitHub metadata'],['Read GitHub metadata','Detail requests'],['Detail requests','Read jobs and UAT'],['Read jobs and UAT','Prepare observation'],['Prepare observation','Save observation'],['Save observation','Check save']])edge(a,b);
+const w={name:'Pandora | read GitHub pipeline evidence',nodes,connections,settings:{executionOrder:'v1',saveDataErrorExecution:'none',saveDataSuccessExecution:'none',saveManualExecutions:false,callerPolicy:'workflowsFromSameOwner',executionTimeout:240}};
+await writeFile('workflows/pipeline-reader.json',JSON.stringify(w,null,2)+'\n');
+if(process.argv.includes('--deploy')){const headers={'X-N8N-API-KEY':process.env.N8N_API_KEY,'Content-Type':'application/json'};const req=async(path,method,body)=>{const r=await fetch(process.env.N8N_API_BASE_URL+'/api/v1'+path,{method,headers,body:JSON.stringify(body),signal:AbortSignal.timeout(30000)});if(!r.ok)throw Error('n8n '+r.status+' '+(await r.text()).slice(0,200));return r.json();};let id;try{id=(await readFile('.local/pipeline-reader-id','utf8')).trim();}catch{}const saved=await req('/workflows'+(id?'/'+id:''),id?'PUT':'POST',w);await writeFile('.local/pipeline-reader-id',saved.id);if(process.argv.includes('--activate'))await req('/workflows/'+saved.id+'/activate','POST',{});console.log(JSON.stringify({id:saved.id,active:process.argv.includes('--activate')}));}

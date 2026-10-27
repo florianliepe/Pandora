@@ -84,5 +84,14 @@ test('aggregate tests enforce membership and cadence configuration requires owne
   assert.equal((await call(path(),'GET',null,owner.token)).data.iterations.length,first);
 });
 test('cross-origin requests rejected and logout revokes token',async()=>{const r=await fetch(origin+'/api/projects',{headers:{Origin:'https://evil.test',Authorization:`Bearer ${owner.token}`}});assert.equal(r.status,403);assert.equal((await call('/auth/logout','POST',{},outsider.token)).status,200);assert.equal((await call('/projects','GET',null,outsider.token)).status,401);});
+test('pipeline connection is owner-only, revision checked, and ingestion is not public',async()=>{
+  for(const user of [developer,tester,viewer])assert.equal((await call(path()+'/pipelines','PUT',{enabled:true,revision:0},user.token)).status,403);
+  assert.equal((await call(path()+'/pipelines','PUT',{enabled:true,revision:0},owner.token)).status,200);
+  assert.equal((await call(path()+'/pipelines','PUT',{enabled:false,revision:0},owner.token)).status,409);
+  assert.equal((await call(path()+'/pipelines','PUT',{enabled:true,revision:1,repository:'attacker/repo'},owner.token)).status,400);
+  assert.equal((await call('/automation/pipelines/complete','POST',{},owner.token)).status,404);
+  assert.equal((await call(path()+'/pipelines','PUT',{enabled:false,revision:1},owner.token)).status,200);
+});
+
 test('project archiving hides records and preserves audit history',async()=>{assert.equal((await call(path(),'DELETE',null,developer.token)).status,403);assert.equal((await call(path(),'DELETE',null,owner.token)).status,200);assert.equal((await call(path(),'GET',null,owner.token)).status,404);assert.ok((await store.read()).events.some(e=>e.action==='project.archived'));});
 
