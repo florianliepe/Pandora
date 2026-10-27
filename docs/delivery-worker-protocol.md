@@ -96,8 +96,7 @@ Owner/tester records an explicit accept/reopen decision with handoff and issue v
 notes at `POST /projects/:projectId/deliveries/:id/decision`. Acceptance rechecks current
 report, test, PR, deployment and verification evidence. It changes the issue to verified;
 reopening changes it to reopened. No manual test runs are invented. Delivery-linked issues
-cannot bypass this gate through the generic status editor. These protocol changes remain
-unpublished until the live rollout is validated.
+cannot bypass this gate through the generic status editor. These protocol changes were published with PR #5. Full real-pilot verification remains pending.
 
 ## Executing tests and producing evidence
 

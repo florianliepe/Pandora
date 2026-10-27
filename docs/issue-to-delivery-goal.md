@@ -161,3 +161,27 @@ existing revisions and observations; they are not a new fix produced by this goa
   commit/result hash and are submitted through the existing authenticated worker CLI.
   This does not supply the real pilot's assertions. Next: validate and publish PR #5's
   combined runtime/workflows/frontend, then exercise the live app and new user-reported issue.
+- 2026-10-27 rollout: both PR #5 CI runs passed (40490816046 and 40490810042),
+  including PostgreSQL and browser acceptance. PR #5 merged as
+  c79c56094bff7f018656a4fa6dd5c5a3dc5c0fb6. Pages run 40492266047 built/deployed
+  successfully; live app.js exactly matches the committed artifact bytes.
+  Updated active internal store KblOJCQpInwzyg1a, public API zBVoVh2q6lDlRB6B,
+  pipeline reader G3AgLCI7S8Do0a2Z and new deployment reader Xalw2xu0dLAqw1vF.
+  Existing workflows were backed up locally before rollout. Live API health returned 200.
+  An authenticated temporary live-store check confirmed one connected project, zero linked
+  PRs and zero deployment targets; it was removed afterward. No issue was marked fixed.
+- Live dependency: meids-app frontend/sandbox revision endpoints currently return 404;
+  backend health/build-info return empty 401 due to App Service Easy Auth. The development
+  agent confirmed no existing suitable service credential, and recommended excluding only
+  /api/build-info while preserving the complete authsettingsV2 configuration. Human approval
+  for source PR #23 merge/deploy and that exact-path exception is pending. No hosting auth
+  settings have been changed. User-provided new pilot and authenticated live UI verification
+  also remain pending; protocol fixtures and deployed assets do not establish pilot completion.
+- Authenticated live browser recheck used the user's existing session (no new OTP). After
+  reloading the published frontend, the Intellectual Twin workspace, handoff controls,
+  generated test drafts and current repository observations rendered. The private screenshot
+  fetched and rendered successfully. The existing fixed issue was left unchanged and no
+  duplicate fix was queued. A full collector invocation initially returned an error with
+  no retained diagnostic payload; a subsequent instrumented invocation succeeded with one
+  project updated, no pipeline/deployment errors and zero eligible deployment targets.
+  Temporary check workflows were removed. The initial failure's cause is unconfirmed.
