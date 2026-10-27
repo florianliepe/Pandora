@@ -198,3 +198,57 @@ existing revisions and observations; they are not a new fix produced by this goa
   chat was informed. The source merge/access approval prerequisites are resolved; the
   remaining end-to-end completion dependency is the user's new real pilot and its actual
   reproduction, fix, regression tests, deployment and explicit acceptance.
+
+## Knowledge-graph backlog synchronization — 2026-10-27
+
+Canonical source reviewed: [hardening report at d04340d](https://github.com/florianliepe/meids-app/blob/d04340d/docs/uat/knowledge-graph-hardening-test-report-20261027.md).
+This is a repository-backlog reconciliation of the development team's evidence, not new
+Pandora test execution or tester acceptance. Report revision d04340d is distinct from the
+reported deployed backend revision 00cdb3145b2507d5f6148fb4456a7f357a206d28 (run 40509765893).
+No production issue statuses or data were changed during reconciliation.
+
+### Reported fixed/delivered
+
+| ID | Outcome | Evidence boundary |
+|---|---|---|
+| KG-001 | Durable graph nodes, edges, reviews and projection runs implemented | Migration 016 and live 19 nodes/37 active edges/1 projection run reported; zero live review decisions means persisted human-promotion round trips are not demonstrated by these counts. |
+| KG-002 | Revision changes invalidate accepted relations | Local revision-invalidation tests reported; do not label this a live approval test. |
+| KG-003 | Owner/admin/reviewer authorization enforced | Guard and promotion-boundary tests reported; comprehensive two-principal isolation remains KG-010. |
+| KG-004 | Default/unknown vector scope fallbacks removed | Reported code/test fix; full cross-service scope tests remain open. |
+| KG-005 | Evidence/provenance contract for semantic proposals implemented | Ontology-bounded candidate-only proposals and confidence cap; semantic quality evaluation remains KG-011. |
+| KG-006 | Embedding environment/provenance alignment corrected | Model/dimension provenance recorded; M1/M2 migration quality evaluation is not complete. |
+| KG-007 | Azure durable graph migration and persistence verified | Migration 016 and durable projection counts reported. |
+| KG-015 | Backend startup regression corrected | Listener starts before optional async migrations; production auto-migration returned to false; exact served backend revision reported. |
+
+### Open prioritized release-hardening backlog
+
+| Priority / severity | ID | Required next evidence | Related tests |
+|---|---|---|---|
+| P0 / Critical | KG-010 | Two-principal API, Search, Blob and graph-traversal isolation matrix, including direct IDs and revoked access. Existing RLS 19 allowed/0 wrong-tenant probe is narrow evidence only. | ISO-01, ISO-02 |
+| P1 / High | KG-009 | Disposable PostgreSQL/Blob/Search fault injection: atomic commit kill points, crash after acknowledgement, replay, lease expiry, poison events, concurrent workers and out-of-order revisions. | TX-01, OUT-01/02/03 |
+| P1 / High | KG-008 | Scheduled reconciliation and orphan reporting; controlled stale/missing projection repairs within a predefined SLA, then idempotent rerun. | REC-01 |
+| P1 / High | KG-013 | Isolated n8n duplicate/stale callbacks, cancellation, timeout/retry and approval-boundary assertions. | AGT-02 |
+| P1 / High | KG-012 | Central workflow-ID registry and deployed callable-vs-public-wrapper topology validation. Successful execution counts do not alone establish exact bindings/contracts. | AGT-01 |
+| P1 / High | KG-014 | Empty nonproduction Search rebuild with concurrent changes, cutover and rollback evidence. | REC-02 |
+| P1 / High | KG-011 | Versioned multilingual evaluation corpus, per-model thresholds, incompatible-dimension tests and controlled migration/rollback quality results. | SEM-02 |
+
+### Test result reconciliation and release gates
+
+- ISO-01: partial coverage of the original broad case, despite the source report's
+  "Passed live" label. Only the described runtime database tenant probe is demonstrated.
+- TX-01: transaction/static-contract evidence only; crash/kill-point acceptance remains open.
+- REL-01: durable projection demonstrated by reported counts; acceptance/rejection persistence
+  across restart and rebuild still needs explicit round-trip evidence before closing the full case.
+- REL-02 and REV-01: local/contract passes reported; preserve the execution scope in test records.
+- SEM-01: pure-vector, conversion and threshold regressions reported passed.
+- AGT-01: 7/7 successful workflow executions and contract suites reported; retain raw correlated
+  request/scope/tool/post-answer evidence for the specific release. This does not close KG-012/013.
+- DEP-01: exact backend SHA/run evidence reported. Full Pandora delivery acceptance still
+  requires relevant tests for that revision, every selected target and explicit tester acceptance.
+- Browser: no warnings/errors reported; this is supporting evidence, not functional coverage.
+- OUT-01/02/03, REC-01/02, SEM-02 and AGT-02 remain partial/pending as specified above.
+
+No isolation or approval-boundary failure may be waived. Other P1 waivers require a named
+owner, mitigation and review date. Semantic scores never approve, merge or expose knowledge.
+The recovery pilot remains proposed; this synchronization does not replace the user's new
+pilot or declare the overarching issue-to-delivery goal complete.
