@@ -12,7 +12,7 @@ export function automationView(s,projectId){
  const ready=!!runner?.ready&&Date.parse(runner.checkedAt)<=Date.now()+60000&&Date.now()-Date.parse(runner.checkedAt)<15*60000;
  return {enabled:!!config.enabled,revision:config.revision,repository:automationRepository,mergePolicy:'after_required_checks',ready,reason:ready?'Runner checks passed':runner?.reason||'Unattended runner authentication and required repository checks are not configured',events:(s.issueAutomationEvents||[]).filter(e=>e.projectId===projectId).slice(-30).map(({lease,...e})=>e)};
 }
-function cancelEvent(s,e,reason){
+export function cancelEvent(s,e,reason){
  if(terminal.has(e.state))return;
  e.state=e.runId||e.attempts?'cancellation_requested':'cancelled';e.reason=reason;e.updatedAt=now();delete e.lease;
  if(e.jobId){const j=s.deliveries?.find(j=>j.id===e.jobId);if(j&&!['accepted','reopened'].includes(j.state)){j.state='cancelled';j.cancelledAt=now();j.version++;delete j.lease;}}
@@ -34,7 +34,7 @@ export function recordIssueEvent(s,issue,actor,kind,before){
  if(!['created','updated','screenshot'].includes(kind)||actor==='automation'||actor==='codex-local'||actor==='codex-runner')return;
  if(kind==='updated'&&!triggerFields.some(k=>before?.[k]!==issue[k]))return;
  const project=s.projects.find(p=>p.id===issue.projectId&&!p.deletedAt),config=project?.issueAutomation;
- if(!config?.enabled||issue.deletedAt)return;
+ if(!config?.enabled||issue.deletedAt||['verified','closed'].includes(issue.status))return;
  const events=s.issueAutomationEvents??=[];
  for(const e of events)if(e.projectId===issue.projectId&&e.issueId===issue.id&&!terminal.has(e.state))cancelEvent(s,e,'Superseded by changed issue evidence');
  const event={id:id(),projectId:issue.projectId,issueId:issue.id,actor,kind,state:'pending',generation:config.revision,evidenceRevision:issue.evidenceRevision||1,createdAt:now(),updatedAt:now(),notBefore:Date.now()+30000,attempts:0,repository:automationRepository};
@@ -42,5 +42,5 @@ export function recordIssueEvent(s,issue,actor,kind,before){
 }
 export function eventIsCurrent(s,e){
  const p=s.projects.find(p=>p.id===e.projectId&&!p.deletedAt),i=s.issues.find(i=>i.id===e.issueId&&i.projectId===e.projectId&&!i.deletedAt);
- return !!p?.issueAutomation?.enabled&&p.issueAutomation.revision===e.generation&&!!i&&(i.evidenceRevision||1)===e.evidenceRevision;
+ return !!p?.issueAutomation?.enabled&&s.members.some(m=>m.projectId===e.projectId&&m.userId===p.issueAutomation.ownerId&&m.role==='owner')&&p.issueAutomation.revision===e.generation&&!!i&&!['verified','closed'].includes(i.status)&&(i.evidenceRevision||1)===e.evidenceRevision;
 }

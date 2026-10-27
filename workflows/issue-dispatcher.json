@@ -15,6 +15,39 @@
       ]
     },
     {
+      "id": "urgent-cancellation",
+      "name": "Urgent cancellation",
+      "type": "n8n-nodes-base.if",
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "urgent",
+              "leftValue": "={{ $json.urgent === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "typeVersion": 2.2,
+      "position": [
+        260,
+        0
+      ]
+    },
+    {
       "id": "recovery-schedule",
       "name": "Recovery schedule",
       "type": "n8n-nodes-base.scheduleTrigger",
@@ -30,7 +63,7 @@
       },
       "typeVersion": 1.2,
       "position": [
-        260,
+        520,
         0
       ]
     },
@@ -44,7 +77,7 @@
       },
       "typeVersion": 1.1,
       "position": [
-        520,
+        780,
         0
       ],
       "webhookId": "pandora-issue-debounce"
@@ -78,7 +111,7 @@
       },
       "typeVersion": 1.2,
       "position": [
-        780,
+        1040,
         0
       ]
     },
@@ -91,8 +124,8 @@
       },
       "typeVersion": 2,
       "position": [
-        1040,
-        0
+        0,
+        250
       ]
     },
     {
@@ -123,7 +156,7 @@
       },
       "typeVersion": 2.2,
       "position": [
-        0,
+        260,
         250
       ]
     },
@@ -165,7 +198,7 @@
       },
       "typeVersion": 4.2,
       "position": [
-        260,
+        520,
         250
       ],
       "credentials": {
@@ -205,7 +238,7 @@
       },
       "typeVersion": 1.2,
       "position": [
-        520,
+        780,
         250
       ]
     },
@@ -244,7 +277,7 @@
       },
       "typeVersion": 4.2,
       "position": [
-        780,
+        1040,
         250
       ],
       "credentials": {
@@ -260,12 +293,78 @@
       "name": "Match cancellation",
       "type": "n8n-nodes-base.code",
       "parameters": {
-        "jsCode": "const task=$('Expand tasks').item.json;if($json.statusCode!==200)return [];const runs=($json.body.workflow_runs||[]).filter(r=>r.display_title==='Pandora issue '+task.eventId&&r.event==='workflow_dispatch');if(!runs.length)return [];return runs.filter(r=>r.status!=='completed').map(r=>({json:{eventId:task.eventId,runId:r.id},pairedItem:{item:0}}));"
+        "jsCode": "const task=$('Expand tasks').item.json;if($json.statusCode!==200)return [];const runs=($json.body.workflow_runs||[]).filter(r=>r.display_title==='Pandora issue '+task.eventId&&r.event==='workflow_dispatch');if(!runs.length)return [];if(runs.every(r=>r.status==='completed'))return [{json:{complete:true,eventId:task.eventId,disposition:runs.every(r=>r.conclusion==='cancelled')?'cancelled':'finished'},pairedItem:{item:0}}];return runs.filter(r=>r.status!=='completed').map(r=>({json:{complete:false,eventId:task.eventId,runId:r.id},pairedItem:{item:0}}));"
       },
       "typeVersion": 2,
       "position": [
-        1040,
-        250
+        0,
+        500
+      ]
+    },
+    {
+      "id": "cancellation-complete",
+      "name": "Cancellation complete",
+      "type": "n8n-nodes-base.if",
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "complete",
+              "leftValue": "={{ $json.complete }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "typeVersion": 2.2,
+      "position": [
+        260,
+        500
+      ]
+    },
+    {
+      "id": "confirm-cancellation",
+      "name": "Confirm cancellation",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "KblOJCQpInwzyg1a"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "path": "/automation/issues/cancelled",
+            "method": "POST",
+            "body": "={{ {projectId:'3daa1c59-cd24-487b-a8e4-dc5d930e41f0',eventId:$json.eventId,disposition:$json.disposition} }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "typeVersion": 1.2,
+      "position": [
+        520,
+        500
       ]
     },
     {
@@ -303,7 +402,7 @@
       },
       "typeVersion": 4.2,
       "position": [
-        0,
+        780,
         500
       ],
       "credentials": {
@@ -318,6 +417,24 @@
   "connections": {
     "Committed issue event": {
       "main": [
+        [
+          {
+            "node": "Urgent cancellation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Urgent cancellation": {
+      "main": [
+        [
+          {
+            "node": "Claim dispatch tasks",
+            "type": "main",
+            "index": 0
+          }
+        ],
         [
           {
             "node": "Debounce",
@@ -413,6 +530,24 @@
     },
     "Match cancellation": {
       "main": [
+        [
+          {
+            "node": "Cancellation complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cancellation complete": {
+      "main": [
+        [
+          {
+            "node": "Confirm cancellation",
+            "type": "main",
+            "index": 0
+          }
+        ],
         [
           {
             "node": "Cancel event run",
