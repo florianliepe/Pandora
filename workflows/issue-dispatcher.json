@@ -1,0 +1,434 @@
+{
+  "name": "Pandora | issue event dispatcher",
+  "nodes": [
+    {
+      "id": "committed-issue-event",
+      "name": "Committed issue event",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "id": "recovery-schedule",
+      "name": "Recovery schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      },
+      "typeVersion": 1.2,
+      "position": [
+        260,
+        0
+      ]
+    },
+    {
+      "id": "debounce",
+      "name": "Debounce",
+      "type": "n8n-nodes-base.wait",
+      "parameters": {
+        "amount": 35,
+        "unit": "seconds"
+      },
+      "typeVersion": 1.1,
+      "position": [
+        520,
+        0
+      ],
+      "webhookId": "pandora-issue-debounce"
+    },
+    {
+      "id": "claim-dispatch-tasks",
+      "name": "Claim dispatch tasks",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "KblOJCQpInwzyg1a"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "path": "/automation/issues/tasks",
+            "method": "POST",
+            "body": "={{ {projectId:'3daa1c59-cd24-487b-a8e4-dc5d930e41f0'} }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "typeVersion": 1.2,
+      "position": [
+        780,
+        0
+      ]
+    },
+    {
+      "id": "expand-tasks",
+      "name": "Expand tasks",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "if($json.status!==200)return [];return ($json.body.tasks||[]).map(t=>({json:t,pairedItem:{item:0}}));"
+      },
+      "typeVersion": 2,
+      "position": [
+        1040,
+        0
+      ]
+    },
+    {
+      "id": "dispatch-or-cancel",
+      "name": "Dispatch or cancel",
+      "type": "n8n-nodes-base.if",
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "dispatch",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "dispatch",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        250
+      ]
+    },
+    {
+      "id": "dispatch-private-runner",
+      "name": "Dispatch private runner",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.github.com/repos/florianliepe/Pandora-data/actions/workflows/pandora-issue-runner.yml/dispatches",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {ref:'main',inputs:{event_id:$json.eventId}} }}",
+        "options": {
+          "timeout": 20000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "typeVersion": 4.2,
+      "position": [
+        260,
+        250
+      ],
+      "credentials": {
+        "githubApi": {
+          "id": "3V46mglu7fpoPISX",
+          "name": "GitHub account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "record-dispatch",
+      "name": "Record dispatch",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "KblOJCQpInwzyg1a"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "path": "/automation/issues/dispatched",
+            "method": "POST",
+            "body": "={{ {projectId:'3daa1c59-cd24-487b-a8e4-dc5d930e41f0',eventId:$('Expand tasks').item.json.eventId,accepted:$json.statusCode===204} }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "typeVersion": 1.2,
+      "position": [
+        520,
+        250
+      ]
+    },
+    {
+      "id": "find-event-runs",
+      "name": "Find event runs",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.github.com/repos/florianliepe/Pandora-data/actions/workflows/pandora-issue-runner.yml/runs?event=workflow_dispatch&per_page=100",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "typeVersion": 4.2,
+      "position": [
+        780,
+        250
+      ],
+      "credentials": {
+        "githubApi": {
+          "id": "3V46mglu7fpoPISX",
+          "name": "GitHub account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "match-cancellation",
+      "name": "Match cancellation",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "const task=$('Expand tasks').item.json;if($json.statusCode!==200)return [];const runs=($json.body.workflow_runs||[]).filter(r=>r.display_title==='Pandora issue '+task.eventId&&r.event==='workflow_dispatch');if(!runs.length)return [];return runs.filter(r=>r.status!=='completed').map(r=>({json:{eventId:task.eventId,runId:r.id},pairedItem:{item:0}}));"
+      },
+      "typeVersion": 2,
+      "position": [
+        1040,
+        250
+      ]
+    },
+    {
+      "id": "cancel-event-run",
+      "name": "Cancel event run",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.github.com/repos/florianliepe/Pandora-data/actions/runs/{{ $json.runId }}/cancel",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        500
+      ],
+      "credentials": {
+        "githubApi": {
+          "id": "3V46mglu7fpoPISX",
+          "name": "GitHub account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Committed issue event": {
+      "main": [
+        [
+          {
+            "node": "Debounce",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recovery schedule": {
+      "main": [
+        [
+          {
+            "node": "Claim dispatch tasks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Debounce": {
+      "main": [
+        [
+          {
+            "node": "Claim dispatch tasks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claim dispatch tasks": {
+      "main": [
+        [
+          {
+            "node": "Expand tasks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Expand tasks": {
+      "main": [
+        [
+          {
+            "node": "Dispatch or cancel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dispatch or cancel": {
+      "main": [
+        [
+          {
+            "node": "Dispatch private runner",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Find event runs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dispatch private runner": {
+      "main": [
+        [
+          {
+            "node": "Record dispatch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find event runs": {
+      "main": [
+        [
+          {
+            "node": "Match cancellation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Match cancellation": {
+      "main": [
+        [
+          {
+            "node": "Cancel event run",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "none",
+    "saveManualExecutions": false,
+    "executionTimeout": 180
+  }
+}

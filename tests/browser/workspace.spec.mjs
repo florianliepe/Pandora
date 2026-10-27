@@ -112,6 +112,25 @@ test('email login, project, issue, search, test case and execution',async({page}
   await expect(page.getByText('reopen · Reopened fixture regression',{exact:true})).toBeVisible();
 
   await page.getByRole('button',{name:'Cancel',exact:true}).click();
+  await page.getByRole('button',{name:'Project settings',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Start automation',exact:true})).toBeDisabled();
+  // Readiness is a local fixture only, never a claim that a hosted runner exists.
+  const automationStore=await createStore({dataDir:'.local/e2e'});
+  await automationStore.change(s=>{(s.automationRunners??=[]).push({projectId,ready:true,checkedAt:new Date().toISOString()});});
+  await automationStore.close();
+  await page.reload();
+  await page.getByRole('button',{name:'Project settings',exact:true}).click();
+  await page.getByRole('button',{name:'Start automation',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Stop automation',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Issue backlog',exact:true}).click();
+  await page.getByRole('button',{name:'Report issue'}).click();
+  await page.getByLabel('Issue title',{exact:true}).fill('Automation event fixture');
+  await page.getByRole('button',{name:'Save changes',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Automation event fixture',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Project settings',exact:true}).click();
+  await expect(page.getByRole('region',{name:'Issue automation'}).getByText('Pending',{exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Stop automation',exact:true}).click();
+  await expect(page.getByRole('region',{name:'Issue automation'}).getByText('Cancelled',{exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Repositories & CI',exact:true}).click();
   await page.getByRole('button',{name:'Disconnect polling',exact:true}).click();
   await expect(page.getByRole('button',{name:'Connect Intellectual Twin repositories',exact:true})).toBeVisible();

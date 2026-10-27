@@ -23,5 +23,7 @@ export async function applyRequest({snapshot,auth,request,config={}}){
   const authNext={...auth,challenges:state.challenges,sessions:state.sessions};
   delete state.challenges;delete state.sessions;
   if(Buffer.byteLength(JSON.stringify(state),'utf8')>700_000)return {response:{status:413,body:{error:'Pilot record capacity reached; contact the owner'}},authNext:auth,writeGit:false,pendingMail:null,pendingUpload:null,pendingChat:null,download:null};
-  return {response,authNext,snapshot:state,writeGit:JSON.stringify(state)!==original,pendingMail,pendingUpload,pendingChat,download};
+  const changedEvents=JSON.stringify(state.issueAutomationEvents||[])!==JSON.stringify(snapshot.issueAutomationEvents||[]);
+  const pendingAutomation=!config.internalWorker&&response.status<400&&changedEvents;
+  return {response,authNext,snapshot:state,writeGit:JSON.stringify(state)!==original,pendingMail,pendingUpload,pendingChat,download,pendingAutomation};
 }

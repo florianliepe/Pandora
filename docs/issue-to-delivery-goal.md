@@ -269,12 +269,17 @@ No new passing test execution or delivery acceptance is implied by backlog creat
 | KG-008 | 83ef87ab-3a4a-4fc3-ab41-8f8115535917 | REC-01 |
 | KG-013 | 4172881f-ca69-499a-a215-ca51a5a002a7 | AGT-02 |
 | KG-012 | dd9513e8-aa28-4b63-88df-d0d049fcea5e | AGT-01 |
-| KG-014 | ed78a4fb-6dfb-4532-b774-ea35364ce54f | REC-02 — prepared; pending renewed login |
-| KG-011 | fc07636a-fb87-46fd-8883-fe29212db162 | SEM-02 — prepared; pending renewed login |
+| KG-014 | ed78a4fb-6dfb-4532-b774-ea35364ce54f | REC-02 |
+| KG-011 | fc07636a-fb87-46fd-8883-fe29212db162 | SEM-02 |
 
 Nine manual acceptance cases were verified in private repository state, with zero test runs.
 The UI session then expired while saving REC-02. That save was rejected with "Please sign in";
 REC-02 and SEM-02 must be added after renewed authentication, not counted as already saved.
+
+Update after renewed authentication: REC-02 and SEM-02 were saved successfully. Private
+state verification confirmed all seven KG issues, eleven manual acceptance cases, and zero
+test runs. The live priority-sorted backlog shows KG-010 first. Automatically generated
+additional cases remain drafts; none is represented as a passing execution.
 
 Before enabling dispatch, resolve the requested event filter, source merge/deploy approval
 policy, active-work cancellation behavior and execution host. Recommended event filtering
@@ -305,3 +310,30 @@ in different authorized scopes, separate twins/records/Blob paths/Search filters
 projections, synthetic markers, read-only observability, cleanup and explicit stop criteria.
 Local synthetic tests cannot close the real-service isolation gap. The development chat
 also confirmed that direct event ingress into its existing desktop conversation is unverified.
+
+### Confirmed execution policy and implementation checkpoint
+
+The human confirmed creation and description/steps/screenshot events only, ignoring
+agent/status-only feedback; automatic source merge/deploy after required tests pass;
+Stop blocks new work and requests active cancellation; execution uses a separate unattended
+runner. Existing desktop chat coordination continues, but a hosted runner has a separate
+Codex session. No desktop HTTP endpoint or shared-session writer is assumed.
+
+Local implementation now includes owner-only versioned controls, default-off readiness,
+durable debounced events, no historical replay on Start, event-scoped handoff claims,
+supersession/Stop lease revocation, cancellation-request visibility, a post-commit API wake
+hook and a generated n8n dispatcher with a recovery schedule. Unit/API checks and the
+browser Start/Stop fixture pass. These files have NOT been deployed or enabled.
+
+Provisioning remains incomplete: the private `Pandora-data` receiver workflow
+`pandora-issue-runner.yml`, authenticated hosted Codex execution, callback wiring, verified
+runner readiness collection, source publication/merge gating and live cancellation/delivery
+verification still need completion. Do not mark a runner ready or enable Start merely because
+the local fixtures passed. OpenAI Platform requires user sign-in; no API key was available
+or created. Never copy desktop authentication into a GitHub-hosted runner.
+
+Coordinated source prerequisites: meids-app PR #24 and meids-agent-configs PR #3 add
+non-deploying PR validation. Initial CI passed; unique check-run names were requested to
+avoid ambiguity in branch protection. meids-app main has no current protection. GitHub's
+current plan rejects protection for the private agent-configs repository. Keep unattended
+merge disabled there; do not make it public or purchase an upgrade implicitly.
