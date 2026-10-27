@@ -4,7 +4,7 @@ import {assertEventId,SOURCE_REPOSITORY} from './protocol.mjs';
 
 const args=process.argv.slice(2),value=name=>{const i=args.indexOf(name);if(i<0||!args[i+1])throw Error('Missing '+name);return args[i+1];};
 const eventId=assertEventId(value('--event-id'));
-const context=JSON.parse(await readFile(resolve('.runner/private',eventId+'.json'),'utf8'));
+const context=JSON.parse(await readFile(resolve('.runner/private',eventId+'-handoff.json'),'utf8'));
 if(context.job.repository!==SOURCE_REPOSITORY)throw Error('Only meids-app is enabled for unattended source changes');
 const output=resolve(value('--output'));
 const evidence=JSON.stringify(context.job.snapshot,null,2).replaceAll('```','` ` `');

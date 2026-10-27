@@ -7,7 +7,7 @@ const args=process.argv.slice(2),value=name=>{const i=args.indexOf(name);if(i<0|
 const git=(root,...argv)=>execFileSync('git',['-C',root,...argv],{encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
 
 if(args[0]==='diff'){
- const eventId=assertEventId(value('--event-id')),root=resolve(value('--root')),state=JSON.parse(await readFile(resolve('.runner/private',eventId+'.json'),'utf8'));
+ const eventId=assertEventId(value('--event-id')),root=resolve(value('--root')),state=JSON.parse(await readFile(resolve('.runner/private',eventId+'-handoff.json'),'utf8'));
  const head=git(root,'rev-parse','HEAD'),base=state.job.baseSha;
  if(head!==base)throw Error('Codex must begin from the exact claimed base SHA');
  const changed=git(root,'status','--porcelain','--untracked-files=all').split(/\r?\n/).filter(Boolean).map(line=>line.slice(3));

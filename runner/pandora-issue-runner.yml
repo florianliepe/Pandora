@@ -20,6 +20,8 @@ jobs:
   repair:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      EVENT_ID: ${{ inputs.event_id }}
     steps:
       - name: Check out trusted runner
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -32,13 +34,12 @@ jobs:
           PANDORA_BRIDGE_URL: ${{ secrets.PANDORA_BRIDGE_URL }}
           PANDORA_WORKER_TOKEN: ${{ secrets.PANDORA_WORKER_TOKEN }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          MEIDS_APP_GITHUB_TOKEN: ${{ secrets.MEIDS_APP_GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          for name in PANDORA_BRIDGE_URL PANDORA_WORKER_TOKEN OPENAI_API_KEY MEIDS_APP_GITHUB_TOKEN; do
+          for name in PANDORA_BRIDGE_URL PANDORA_WORKER_TOKEN OPENAI_API_KEY; do
             if [ -z "${!name:-}" ]; then echo "Missing required repository secret: $name" >&2; exit 1; fi
           done
-          case "$PANDORA_BRIDGE_URL" in https://*) ;; *) echo "PANDORA_BRIDGE_URL must use HTTPS" >&2; exit 1;; esac
+          if [ "$PANDORA_BRIDGE_URL" != "https://eraneos-agentic-platform.azurewebsites.net/webhook/pandora-issue-runner-v1" ]; then echo "PANDORA_BRIDGE_URL is not the approved receiver" >&2; exit 1; fi
 
       - name: Claim exact event
         id: claim
@@ -46,14 +47,13 @@ jobs:
         env:
           PANDORA_BRIDGE_URL: ${{ secrets.PANDORA_BRIDGE_URL }}
           PANDORA_WORKER_TOKEN: ${{ secrets.PANDORA_WORKER_TOKEN }}
-        run: node runner/bridge.mjs start --event-id "${{ inputs.event_id }}" --run-id "${{ github.run_id }}"
+        run: node runner/bridge.mjs start --event-id "$EVENT_ID" --run-id "$GITHUB_RUN_ID"
 
       - name: Check out pinned application base
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           repository: florianliepe/meids-app
           ref: ${{ steps.claim.outputs.base_sha }}
-          token: ${{ secrets.MEIDS_APP_GITHUB_TOKEN }}
           persist-credentials: false
           path: source
 
@@ -69,19 +69,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npm ci
-          if npm exec --yes playwright -- --version >/dev/null 2>&1; then npm exec playwright install --with-deps chromium; fi
+          npm ci --ignore-scripts
 
       - name: Prepare private prompt
         shell: bash
-        run: node runner/prepare-prompt.mjs --event-id "${{ inputs.event_id }}" --output .runner/private/prompt.txt
+        run: node runner/prepare-prompt.mjs --event-id "$EVENT_ID" --output .runner/private/prompt.txt
 
       - name: Renew claim before model execution
         shell: bash
         env:
           PANDORA_BRIDGE_URL: ${{ secrets.PANDORA_BRIDGE_URL }}
           PANDORA_WORKER_TOKEN: ${{ secrets.PANDORA_WORKER_TOKEN }}
-        run: node runner/bridge.mjs renew --event-id "${{ inputs.event_id }}"
+        run: node runner/bridge.mjs renew --event-id "$EVENT_ID"
 
       - name: Implement bounded candidate
         timeout-minutes: 10
@@ -100,48 +99,34 @@ jobs:
           PANDORA_BRIDGE_URL: ${{ secrets.PANDORA_BRIDGE_URL }}
           PANDORA_WORKER_TOKEN: ${{ secrets.PANDORA_WORKER_TOKEN }}
         run: |
-          node runner/bridge.mjs status --event-id "${{ inputs.event_id }}"
-          node runner/bridge.mjs renew --event-id "${{ inputs.event_id }}"
+          node runner/bridge.mjs status --event-id "$EVENT_ID"
+          node runner/bridge.mjs renew --event-id "$EVENT_ID"
 
       - name: Verify candidate policy
         shell: bash
-        run: node runner/verify-source.mjs diff --event-id "${{ inputs.event_id }}" --root source
+        run: node runner/verify-source.mjs diff --event-id "$EVENT_ID" --root source
 
-      - name: Commit and publish isolated branch
-        id: publish
-        working-directory: source
+      - name: Prepare bounded source publication proposal
         shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.MEIDS_APP_GITHUB_TOKEN }}
-          EVENT_ID: ${{ inputs.event_id }}
-          JOB_ID: ${{ steps.claim.outputs.job_id }}
-          BASE_SHA: ${{ steps.claim.outputs.base_sha }}
         run: |
           set -euo pipefail
-          branch="pandora/$EVENT_ID"
-          git switch -c "$branch"
-          git config user.name "Pandora issue runner"
-          git config user.email "pandora-runner@users.noreply.github.com"
-          git add --all
-          git commit -m "Fix verified Pandora issue"
-          head_sha="$(git rev-parse HEAD)"
-          askpass="$(mktemp)"
-          trap 'rm -f "$askpass"' EXIT
-          printf '#!/bin/sh\nprintf %%s "$GH_TOKEN"\n' > "$askpass"
-          chmod 700 "$askpass"
-          GIT_ASKPASS="$askpass" GIT_USERNAME=x-access-token git push "https://x-access-token@github.com/florianliepe/meids-app.git" "HEAD:refs/heads/$branch"
-          pr_url="$(gh pr create --repo florianliepe/meids-app --base main --head "$branch" --title "Verified Pandora repair" --body "Pandora-Delivery: $JOB_ID")"
-          pr_number="${pr_url##*/}"
-          node -e 'const fs=require("fs");fs.writeFileSync("../.runner/private/publication.json",JSON.stringify({repository:"florianliepe/meids-app",baseBranch:"main",baseSha:process.env.BASE_SHA,headSha:process.argv[1],headBranch:process.argv[2],pullNumber:Number(process.argv[3]),pullUrl:process.argv[4],marker:`Pandora-Delivery: ${process.env.JOB_ID}`}))' "$head_sha" "$branch" "$pr_number" "$pr_url"
-          echo "head_sha=$head_sha" >> "$GITHUB_OUTPUT"
-          echo "pull_number=$pr_number" >> "$GITHUB_OUTPUT"
+          node runner/prepare-publication.mjs --event-id "$EVENT_ID" --root source --output .runner/private/publication-proposal.json
 
-      - name: Register sanitized publication
+      - name: Request constrained trusted publication
         shell: bash
         env:
           PANDORA_BRIDGE_URL: ${{ secrets.PANDORA_BRIDGE_URL }}
           PANDORA_WORKER_TOKEN: ${{ secrets.PANDORA_WORKER_TOKEN }}
-        run: node runner/bridge.mjs publish --event-id "${{ inputs.event_id }}" --file .runner/private/publication.json
+        run: node runner/bridge.mjs publish --event-id "$EVENT_ID" --file .runner/private/publication-proposal.json
+
+      - name: Record evidence harness prerequisite
+        shell: bash
+        env:
+          PANDORA_BRIDGE_URL: ${{ secrets.PANDORA_BRIDGE_URL }}
+          PANDORA_WORKER_TOKEN: ${{ secrets.PANDORA_WORKER_TOKEN }}
+        run: |
+          printf '%s\n' 'Trusted issue-specific reproduction, regression, integration, and browser harness is not configured; publication remains unmerged.' > .runner/private/needs-input.txt
+          node runner/bridge.mjs finish --event-id "$EVENT_ID" --outcome needs_input --summary-file .runner/private/needs-input.txt
 
       - name: Stop unless trusted evidence and merge callbacks are implemented
         shell: bash
@@ -155,7 +140,7 @@ jobs:
         env:
           PANDORA_BRIDGE_URL: ${{ secrets.PANDORA_BRIDGE_URL }}
           PANDORA_WORKER_TOKEN: ${{ secrets.PANDORA_WORKER_TOKEN }}
-        run: node runner/bridge.mjs cancelled --event-id "${{ inputs.event_id }}" --run-id "${{ github.run_id }}"
+        run: node runner/bridge.mjs cancelled --event-id "$EVENT_ID" --run-id "$GITHUB_RUN_ID"
 
       # Deliberately unreachable until the callback/store package implements the documented
       # evidence and merge attestations. Do not replace this gate with model output or gh exit codes.

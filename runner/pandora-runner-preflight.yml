@@ -12,6 +12,7 @@ on:
           - callback
           - provider
           - cancellation
+          - evidence
 
 permissions:
   contents: read
