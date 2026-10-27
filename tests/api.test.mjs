@@ -93,5 +93,19 @@ test('pipeline connection is owner-only, revision checked, and ingestion is not 
   assert.equal((await call(path()+'/pipelines','PUT',{enabled:false,revision:1},owner.token)).status,200);
 });
 
+test('delivery routes scope private snapshots and expose only summaries in project data',async()=>{
+  await call(path()+'/pipelines','PUT',{enabled:true,revision:2},owner.token);
+  await store.change(s=>{const p=s.projects.find(p=>p.id===project.id);p.pipelineEvidence={observedAt:new Date().toISOString(),sources:[{repository:'florianliepe/meids-app',branch:'main',commit:'a'.repeat(40)}],errors:[]};});
+  const current=(await call(path(),'GET',null,owner.token)).data.issues.find(i=>i.id===issue.id);
+  const body={repository:'florianliepe/meids-app',issueVersion:current.version,requestId:'66666666-6666-4666-8666-666666666666'};
+  assert.equal((await call(path()+'/issues/'+issue.id+'/deliveries','POST',body,tester.token)).status,403);
+  const created=await call(path()+'/issues/'+issue.id+'/deliveries','POST',body,owner.token);assert.equal(created.status,201);assert.equal(created.data.snapshot,undefined);
+  const context=await call(path()+'/deliveries/'+created.data.id+'/context','GET',null,viewer.token);assert.equal(context.status,200);assert.equal(context.data.snapshot.report.id,issue.id);
+  assert.equal((await call('/projects/another-project/deliveries/'+created.data.id+'/context','GET',null,owner.token)).status,404);
+  const summary=(await call(path(),'GET',null,viewer.token)).data.deliveries[0];assert.equal(summary.snapshot,undefined);
+  assert.equal((await call(path()+'/deliveries/'+created.data.id+'/cancel','POST',{version:1},developer.token)).status,200);
+  assert.equal((await call(path()+'/deliveries/'+created.data.id+'/context','GET',null,viewer.token)).status,409);
+});
+
 test('project archiving hides records and preserves audit history',async()=>{assert.equal((await call(path(),'DELETE',null,developer.token)).status,403);assert.equal((await call(path(),'DELETE',null,owner.token)).status,200);assert.equal((await call(path(),'GET',null,owner.token)).status,404);assert.ok((await store.read()).events.some(e=>e.action==='project.archived'));});
 
