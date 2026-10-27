@@ -101,3 +101,10 @@ existing revisions and observations; they are not a new fix produced by this goa
   awaiting-review/needs-input/failed outcomes. Raw claim tokens are excluded from Git and
   public summaries. Browser and protocol regression tests passed. Deployed-revision probes,
   standalone test producers and post-deployment verification remain pending.
+- 2026-10-27 worker live checks: branch/PR CI passed for the worker increment. The internal
+  store and scoped worker bridge (`N2M5kc6QdDof1Ker`) were deployed. Missing/wrong Header Auth
+  credentials returned 403; the authenticated CLI returned no queued job. An isolated n8n
+  memory fixture passed prepare/queue/claim, invalid-token rejection, token exclusion,
+  exact-SHA report ingestion and review-readiness checks without production issue writes.
+  The temporary fixture workflow was removed. These are protocol tests, not a real fix or
+  persisted Save/Approve verification. The public handoff/queue UI remains in draft PR #5.

@@ -20,7 +20,7 @@
       "webhookId": "pandora-delivery-worker-v1",
       "credentials": {
         "httpHeaderAuth": {
-          "id": "CONFIGURE_WORKER_HEADER",
+          "id": "NIazUO7wPkCm6cMP",
           "name": "Pandora delivery worker (Intellectual Twin)"
         }
       }
