@@ -16,10 +16,15 @@ const ownerName=id=>data?.members.find(m=>m.userId===id)?.user?.name||'Unassigne
 const url=(path)=>apiBase+'/api'+path;
 function toast(message){$('#toast').textContent=message;$('#toast').classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').classList.remove('visible'),5000);}
 async function api(path,options={}){
-  const r=await fetch(n8nMode?apiBase:url(path),n8nMode?{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({path,method:options.method||'GET',body:options.body,token:token||undefined})}:{...options,headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})},body:options.body?JSON.stringify(options.body):undefined});
-  const envelope=await r.json().catch(()=>({error:'Service unavailable'}));
-  const status=n8nMode?(envelope.status||r.status):r.status,result=n8nMode?(envelope.body||{error:'Service unavailable'}):envelope;
-  if(!r.ok||status>=400){if(status===401&&token){token=null;sessionStorage.removeItem('pandora-session');renderLogin();}throw new Error(result.error||'Request failed');}return result;
+  const request=n8nMode?{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({path,method:options.method||'GET',body:options.body,token:token||undefined})}:{...options,headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})},body:options.body?JSON.stringify(options.body):undefined};
+  for(let attempt=0;;attempt++){
+    const r=await fetch(n8nMode?apiBase:url(path),request);
+    const envelope=await r.json().catch(()=>({error:'Service unavailable'}));
+    const status=n8nMode?(envelope.status||r.status):r.status,result=n8nMode?(envelope.body||{error:'Service unavailable'}):envelope;
+    // Only lease contention is safe to replay: this response is emitted before any write.
+    if(n8nMode&&r.ok&&status===409&&/^Another request is saving\./.test(result.error||'')&&attempt<5){await new Promise(resolve=>setTimeout(resolve,250*(attempt+1)));continue;}
+    if(!r.ok||status>=400){if(status===401&&token){token=null;sessionStorage.removeItem('pandora-session');renderLogin();}throw new Error(result.error||'Request failed');}return result;
+  }
 }
 
 const base=()=>`/projects/${projectId}`;
