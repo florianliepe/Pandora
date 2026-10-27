@@ -1,3 +1,4 @@
+import {z} from 'zod/v3';
 import {workerRequest} from './quality.mjs';
 import {registerRoutes} from './routes.mjs';
 import {createRouter} from './router.mjs';
@@ -13,7 +14,9 @@ export async function applyRequest({snapshot,auth,request,config={}}){
   const app=createRouter();registerRoutes(app,{store,env:{STORAGE_KIND:'github-private-repository'},blobs,
     deliverMail:config.mailReady?async({email,code})=>{pendingMail={to:email,code,purpose:'pandora_login',expiresInMinutes:10};}:null,
     chat:config.agentReady?async body=>{pendingChat=body;return {reply:''};}:null});
-  const r=config.internalWorker?{status:200,contentType:'application/json',body:workerRequest(state,request)}:await app.dispatch({method:request.method||'GET',path:'/api'+request.path,body:request.body||{},headers:{authorization:request.token?`Bearer ${request.token}`:''}});
+  let r;
+  if(config.internalWorker){const draft=structuredClone(state);try{const body=workerRequest(draft,request);state=draft;r={status:200,contentType:'application/json',body};}catch(err){const status=err instanceof z.ZodError?400:err.status||500;r={status,contentType:'application/json',body:{error:err instanceof z.ZodError?'Invalid internal worker payload':status===500?'Unexpected worker error':err.message}};}}
+  else r=await app.dispatch({method:request.method||'GET',path:'/api'+request.path,body:request.body||{},headers:{authorization:request.token?`Bearer ${request.token}`:''}});
   const response={status:r.status,body:r.body};
   let download=null;
   if(r.contentType!=='application/json'&&r.body?.attachmentId){const a=state.attachments.find(a=>a.id===r.body.attachmentId);download={sha:a.blobSha,name:a.name,type:a.type};response.body={};}

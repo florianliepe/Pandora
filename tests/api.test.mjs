@@ -103,7 +103,9 @@ test('delivery routes scope private snapshots and expose only summaries in proje
   const context=await call(path()+'/deliveries/'+created.data.id+'/context','GET',null,viewer.token);assert.equal(context.status,200);assert.equal(context.data.snapshot.report.id,issue.id);
   assert.equal((await call('/projects/another-project/deliveries/'+created.data.id+'/context','GET',null,owner.token)).status,404);
   const summary=(await call(path(),'GET',null,viewer.token)).data.deliveries[0];assert.equal(summary.snapshot,undefined);
-  assert.equal((await call(path()+'/deliveries/'+created.data.id+'/cancel','POST',{version:1},developer.token)).status,200);
+  assert.equal((await call(path()+'/deliveries/'+created.data.id+'/queue','POST',{version:1},tester.token)).status,403);
+  assert.equal((await call(path()+'/deliveries/'+created.data.id+'/queue','POST',{version:1},owner.token)).status,200);
+  assert.equal((await call(path()+'/deliveries/'+created.data.id+'/cancel','POST',{version:2},developer.token)).status,200);
   assert.equal((await call(path()+'/deliveries/'+created.data.id+'/context','GET',null,viewer.token)).status,409);
 });
 

@@ -95,3 +95,9 @@ existing revisions and observations; they are not a new fix produced by this goa
   and out-of-order observations are rejected; failures retain clearly stale observations.
   PR correlation does not change functional test, issue or delivery status. New tests passed;
   publication remains pending while job execution and exact-commit test ingestion are built.
+- Worker component implemented locally: owner/developer queueing; project-scoped n8n Header
+  Auth bridge; expiring per-job claim capabilities; private screenshot retrieval; renewal;
+  cancellation and bounded reclaim; exact-revision, version-pinned test reports; and explicit
+  awaiting-review/needs-input/failed outcomes. Raw claim tokens are excluded from Git and
+  public summaries. Browser and protocol regression tests passed. Deployed-revision probes,
+  standalone test producers and post-deployment verification remain pending.

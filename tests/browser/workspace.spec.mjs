@@ -1,3 +1,4 @@
+import {createStore} from '../../server/store.mjs';
 import {test,expect} from '@playwright/test';
 import {readFile} from 'node:fs/promises';
 test('email login, project, issue, search, test case and execution',async({page})=>{
@@ -54,6 +55,26 @@ test('email login, project, issue, search, test case and execution',async({page}
   await expect(page.getByRole('heading',{name:'Repository evidence, in context.'})).toBeVisible();
   await page.getByRole('button',{name:'Connect Intellectual Twin repositories',exact:true}).click();
   await expect(page.getByRole('button',{name:'Disconnect polling',exact:true})).toBeVisible();
+  const projectId=await page.getByLabel('Project',{exact:true}).inputValue();
+  const fixtureStore=await createStore({dataDir:'.local/e2e'});
+  await fixtureStore.change(s=>{s.projects.find(p=>p.id===projectId).pipelineEvidence={observedAt:new Date().toISOString(),sources:[{repository:'florianliepe/meids-app',branch:'main',commit:'a'.repeat(40)}],runs:[],errors:[]};});
+  await fixtureStore.close();
+  await page.getByRole('button',{name:'Refresh view',exact:true}).click();
+  await page.getByRole('button',{name:'Issue backlog',exact:true}).click();
+  await page.getByRole('button',{name:'<script>literal issue title</script>',exact:true}).click();
+  await page.getByRole('button',{name:'Prepare fix handoff',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Download private handoff',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Link fix PR',exact:true}).click();
+  await page.getByLabel('Pull request number').fill('42');
+  await page.getByRole('button',{name:'Request link verification',exact:true}).click();
+  await page.getByRole('button',{name:'<script>literal issue title</script>',exact:true}).click();
+  await expect(page.getByText('PR #42 · awaiting GitHub verification.',{exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Request fix & tests',exact:true}).click();
+  await expect(page.getByText('Queued',{exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Cancel handoff',exact:true}).click();
+  await expect(page.getByText('Cancelled',{exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Cancel',exact:true}).click();
+  await page.getByRole('button',{name:'Repositories & CI',exact:true}).click();
   await page.getByRole('button',{name:'Disconnect polling',exact:true}).click();
   await expect(page.getByRole('button',{name:'Connect Intellectual Twin repositories',exact:true})).toBeVisible();
   await page.setViewportSize({width:390,height:844});
