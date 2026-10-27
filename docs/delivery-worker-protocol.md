@@ -98,3 +98,50 @@ report, test, PR, deployment and verification evidence. It changes the issue to 
 reopening changes it to reopened. No manual test runs are invented. Delivery-linked issues
 cannot bypass this gate through the generic status editor. These protocol changes remain
 unpublished until the live rollout is validated.
+
+## Executing tests and producing evidence
+
+Use `scripts/run-delivery-tests.mjs` with a private handoff from the worker claim, a reviewed
+JSON plan, and clean committed application/harness checkouts. It runs actual Node tests;
+individual top-level test names map explicitly to pinned case IDs/versions. A suite-level
+failure remains a failure even if the mapped test passed. Missing/duplicate names, skipped
+or TODO tests, interrupted runs, wrong revisions and changed source cannot become passes.
+
+Example plan (replace identifiers with the actual pinned case and real test name):
+
+```json
+{
+  "phase": "candidate",
+  "kind": "regression",
+  "environment": "isolated-test",
+  "files": ["tests/save-regression.test.mjs"],
+  "mappings": [{"caseId": "PINNED_CASE_ID", "caseVersion": 1, "testName": "saved concept survives reload"}]
+}
+```
+
+Run from the Pandora checkout:
+
+```text
+node scripts/run-delivery-tests.mjs --checkout <application-checkout> --harness <reviewed-harness-checkout> --handoff <private-handoff.json> --plan <reviewed-plan.json>
+node scripts/delivery-worker.mjs report --job <job-uuid> --file <returned-report-path>
+```
+
+The harness may be separate so the same new regression test can run against the original
+application revision and the candidate. Both checkout commits are checked before and after
+execution; the report records the harness commit and raw-result SHA256. Test files must be
+committed within that harness. `PANDORA_TARGET_ROOT` points to the application checkout.
+Post-deployment plans also specify `targetId`, use the pinned target environment and merged
+commit, and receive `PANDORA_TARGET_URL` from the verification claim. Suites may use Node
+HTTP clients or Playwright assertions; selecting `kind: browser` does not by itself prove
+browser execution. Review the harness to establish what assertions it actually performs.
+
+No commands are read from issue descriptions. This is execution of reviewed source, not a
+security sandbox. GitHub/n8n credentials are not inherited into the test process. Necessary
+application test accounts and any permitted state-changing tests must be scoped explicitly
+in the reviewed harness. The runner does not automatically send reports, merge or deploy.
+Private artifacts are written under `.local/test-evidence` with restricted directory access.
+A timed-out/interrupted runner produces no accepted report; inspect its execution before retry.
+
+The producer is tested using real passing/failing Node assertions in disposable committed
+repositories. These validate the producer, not the Intellectual Twin's business behavior.
+The new user-reported pilot still needs its concrete reproduction and regression assertions.

@@ -151,3 +151,13 @@ existing revisions and observations; they are not a new fix produced by this goa
   establish protocol/UI behavior, not a real deployed fix. Next implementation dependency:
   a test producer that executes actual suites and maps individual results to pinned cases,
   followed by public/internal workflow rollout and the user-selected real pilot.
+- 2026-10-27 test producer: implemented actual Node test execution with explicit top-level
+  test-to-pinned-case mappings, clean application/harness revision checks before and after
+  execution, restricted local artifacts and no inherited n8n/GitHub credentials. The same
+  separately committed harness can reproduce on base and test candidate revisions. Missing
+  or ambiguous tests fail closed; skipped/TODO results stay non-passing; unrelated suite
+  failures cannot be masked by a passing mapped case. Three integration tests run real
+  assertions in disposable Git repositories (passing and failing). Reports retain harness
+  commit/result hash and are submitted through the existing authenticated worker CLI.
+  This does not supply the real pilot's assertions. Next: validate and publish PR #5's
+  combined runtime/workflows/frontend, then exercise the live app and new user-reported issue.
