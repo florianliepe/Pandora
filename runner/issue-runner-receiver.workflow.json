@@ -1,0 +1,145 @@
+{
+  "name": "Pandora | unattended issue runner receiver",
+  "nodes": [
+    {
+      "id": "runner-callback",
+      "name": "Runner callback",
+      "type": "n8n-nodes-base.webhook",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "pandora-issue-runner-v1",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "pandora-issue-runner-v1",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "ngpBFvJOlm8BMUif",
+          "name": "Pandora unattended runner (Intellectual Twin)"
+        }
+      }
+    },
+    {
+      "id": "scope-exact-operation",
+      "name": "Scope exact operation",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "const input=$json;if(input.headers?.origin)throw Error('Browser access is not supported');const request=typeof input.body==='string'?JSON.parse(input.body):input.body;const issue=new Set(['preflight','start','status','cancelled','publish','merge-readiness','merged']);const delivery=new Set(['renew','evidence','report','finish']);if(!request||request.schemaVersion!==1||(!issue.has(request.operation)&&!delivery.has(request.operation))||typeof request.eventId!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(request.eventId)||!Number.isSafeInteger(request.runId)||request.runId<=0||JSON.stringify(request).length>120000)throw Error('Invalid runner callback');const proposed=new Set(['publish','merge-readiness','merged']);const path=request.operation==='preflight'?'/automation/issues/preflight':proposed.has(request.operation)?'/automation/issues/'+request.operation:(issue.has(request.operation)?'/automation/issues/':'/automation/delivery/')+request.operation;const body={...(request.body||{}),projectId:'3daa1c59-cd24-487b-a8e4-dc5d930e41f0'};if(request.operation==='preflight'){body.runId=request.runId;body.syntheticEventId=request.eventId;}if(request.operation==='start'||request.operation==='status'){body.eventId=request.eventId;body.runId=request.runId;}if(request.operation==='cancelled')body.eventId=request.eventId;if(delivery.has(request.operation))body.workerId='codex-local';if(proposed.has(request.operation)){body.eventId=request.eventId;body.runId=request.runId;body.workerId='codex-local';}return [{json:{path,method:'POST',body}}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        280,
+        0
+      ]
+    },
+    {
+      "id": "authorize-in-pandora-store",
+      "name": "Authorize in Pandora store",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "KblOJCQpInwzyg1a"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "path": "={{ $json.path }}",
+            "method": "POST",
+            "body": "={{ $json.body }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "typeVersion": 1.2,
+      "position": [
+        560,
+        0
+      ]
+    },
+    {
+      "id": "return-no-store-json",
+      "name": "Return no-store JSON",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              },
+              {
+                "name": "X-Content-Type-Options",
+                "value": "nosniff"
+              }
+            ]
+          }
+        }
+      },
+      "typeVersion": 1.4,
+      "position": [
+        840,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Runner callback": {
+      "main": [
+        [
+          {
+            "node": "Scope exact operation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scope exact operation": {
+      "main": [
+        [
+          {
+            "node": "Authorize in Pandora store",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Authorize in Pandora store": {
+      "main": [
+        [
+          {
+            "node": "Return no-store JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "none",
+    "saveManualExecutions": false,
+    "executionTimeout": 180
+  }
+}
