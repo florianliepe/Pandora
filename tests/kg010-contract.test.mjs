@@ -25,7 +25,7 @@ function manifest() {
       label: index ? "principal_b" : "principal_a",
       tenantId: "11111111-1111-4111-8111-111111111111",
       objectId: index ? "22222222-2222-4222-8222-222222222222" : "33333333-3333-4333-8333-333333333333",
-      credentialSecretName: `PANDORA-KG010-PRINCIPAL-${suffix.toUpperCase()}-TOKEN`,
+      credentialSecretName: `PANDORA_KG010_PRINCIPAL_${suffix.toUpperCase()}_TOKEN`,
       expectedOrganizationId: "eraneos-uat",
       expectedUserId: `kg010-user-${suffix}`,
       expectedTwinId: `kg010-twin-${suffix}`,
@@ -72,7 +72,11 @@ test("KG-010 result rejects same-subject auth, cross-scope visibility and incomp
     revocation: { principal: "principal_b", apiDenied: true, searchEmpty: true, blobDenied: true, graphEmpty: true, evidenceDigest: "b".repeat(64) },
     cleanup: { markersRemoved: true, outboxDrained: true, evidenceDigest: "c".repeat(64) },
   };
+  result.runMarker=`pandora-kg010-${result.runId}`;
   assert.equal(validateKg010ProbeResult(result, prerequisites).matrix.length, 8);
+  assert.throws(()=>validateKg010ProbeResult({...result,runMarker:`pandora-kg010-${randomUUID()}`},prerequisites),/marker does not match/);
+  assert.throws(()=>validateKg010ProbeResult({...result,startedAt:new Date(now-601000).toISOString(),completedAt:new Date(now-600000).toISOString()},prerequisites),/must be current/);
+  assert.throws(()=>validateKg010ProbeResult({...result,startedAt:new Date(now+120000).toISOString(),completedAt:new Date(now+121000).toISOString()},prerequisites),/must be current/);
   assert.throws(() => validateKg010ProbeResult({ ...result, authenticatedObjects: [prerequisites.principals[0].objectId, prerequisites.principals[0].objectId] }, prerequisites), /authenticated objects do not match/);
   assert.throws(() => validateKg010ProbeResult({ ...result, matrix: matrix.map((item, index) => index ? item : { ...item, foreignMarkerVisible: true }) }, prerequisites), /failed observation/);
   assert.throws(() => validateKg010ProbeResult({ ...result, cleanup: { ...result.cleanup, markersRemoved: false } }, prerequisites), /cleanup is incomplete/);

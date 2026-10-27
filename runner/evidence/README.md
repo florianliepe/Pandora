@@ -67,3 +67,10 @@ submit only validated digests. Florian twice, or a changed request `userId` unde
 does not satisfy independent authentication. Florian and Adem are usable only if both log in
 independently against a disposable nonproduction data set and the human owners approve that
 temporary use; dedicated test identities are preferred.
+
+These validators check structure and completeness only. They do not authenticate tokens,
+prove that an environment is nonproduction, or verify evidence digests against real responses.
+Before enabling the probe, independently verify the approved resource inventory, token
+signature/issuer/audience/expiry and actual server-authenticated subjects. Preserve the raw
+observations privately and bind them to the exact deployed revision. A self-declared
+`nonproduction` label or a JSON object containing `passed` is never acceptance evidence.

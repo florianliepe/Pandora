@@ -5,7 +5,7 @@ const CASES = Object.freeze({
 });
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const azureName = /^[A-Za-z0-9][A-Za-z0-9._-]{1,126}$/;
-const secretName = /^[A-Za-z0-9-]{3,127}$/;
+const secretName = /^[A-Z_][A-Z0-9_]{2,127}$/;
 
 function object(value) {
   return value && typeof value === "object" && !Array.isArray(value);
@@ -98,8 +98,10 @@ export function validateKg010ProbeResult(value, rawManifest) {
   keys(value, ["schemaVersion", "issueId", "runId", "runMarker", "startedAt", "completedAt", "authenticatedObjects", "matrix", "revocation", "cleanup"], "KG-010 probe result");
   if (value.schemaVersion !== 1 || value.issueId !== ISSUE_ID || !uuid.test(value.runId)) throw new Error("KG-010 probe identity is invalid");
   text(value.runMarker, "runMarker", /^pandora-kg010-[0-9a-f-]{36}$/i);
+  if(value.runMarker!==`pandora-kg010-${value.runId}`)throw new Error("KG-010 marker does not match the probe run");
   const started = Date.parse(value.startedAt), completed = Date.parse(value.completedAt);
   if (!Number.isFinite(started) || !Number.isFinite(completed) || completed < started || completed - started > manifest.safety.maxRuntimeMinutes * 60000) throw new Error("KG-010 probe timing is invalid");
+  if(completed>Date.now()+60000||Date.now()-completed>300000)throw new Error("KG-010 probe result must be current");
   if (!Array.isArray(value.authenticatedObjects) || value.authenticatedObjects.length !== 2) throw new Error("KG-010 requires two authenticated token subjects");
   const expectedObjects = new Set(manifest.principals.map((item) => item.objectId.toLowerCase()));
   if (new Set(value.authenticatedObjects.map((item) => String(item).toLowerCase())).size !== 2 || value.authenticatedObjects.some((item) => !expectedObjects.has(String(item).toLowerCase()))) {
