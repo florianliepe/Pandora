@@ -1,5 +1,5 @@
 import {selectDeploymentTargets} from './deployment-worker.mjs';
-import {queueDelivery,queueVerification,decideDelivery,deliveryClosureGate} from './delivery-worker.mjs';
+import {queueDelivery,queueVerification,decideDelivery,deliveryClosureGate,reopenIssueDeliveries} from './delivery-worker.mjs';
 import {prepareDelivery,deliveryContext,cancelDelivery,publicJob,requestPullLink} from './delivery.mjs';
 import {queueTests,evidenceFields,derivedTestStatus,syncTestStatuses,cadenceSchema,ensureIterations,iterationSuggestion} from './quality.mjs';
 import {createHash,randomBytes,randomInt,timingSafeEqual} from 'node:crypto';
@@ -113,6 +113,7 @@ const mailReady=!!deliverMail;
           }
         }
         const before=structuredClone(item);Object.assign(item,data,{version:item.version+1,updatedAt:now()});
+        if(collection==='issues'&&before.status!==item.status&&item.status==='reopened')reopenIssueDeliveries(s,item,req.user.id);
         if(collection==='issues'&&evidenceFields.some(k=>before[k]!==item[k]))queueTests(item);
         if(collection==='cases'){item.manualEdited=true;item.reviewStatus='approved';}
         if(collection==='runs'){const c=s.cases.find(c=>c.id===data.caseId);if(c.issueId&&c.issueId!==data.issueId)fail(400,'Run must reference its test case issue');if(data.caseId!==before.caseId||data.issueId!==before.issueId){item.caseSnapshot=structuredClone(c);item.issueEvidenceRevision=s.issues.find(i=>i.id===data.issueId)?.evidenceRevision||1;}}

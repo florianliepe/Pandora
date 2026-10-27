@@ -1,3 +1,5 @@
+import {randomUUID} from 'node:crypto';
+import {deliveryWorker} from '../../server/delivery-worker.mjs';
 import {createStore} from '../../server/store.mjs';
 import {test,expect} from '@playwright/test';
 import {readFile} from 'node:fs/promises';
@@ -80,6 +82,35 @@ test('email login, project, issue, search, test case and execution',async({page}
   await expect(page.getByText('Queued',{exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Cancel handoff',exact:true}).click();
   await expect(page.getByText('Cancelled',{exact:true})).toBeVisible();
+  // Isolated protocol fixtures: these reports exercise UI gates, not real delivery claims.
+  await page.getByRole('button',{name:'Prepare fix handoff',exact:true}).click();
+  const prepareStore=await createStore({dataDir:'.local/e2e'});
+  await prepareStore.change(s=>{const j=s.deliveries.filter(j=>j.projectId===projectId).at(-1),at=new Date().toISOString();j.state='awaiting_review';j.pullRequest={number:43,revision:1};j.pullObservation={observedAt:at,correlationVerified:true,headSha:'b'.repeat(40),mergeSha:'c'.repeat(40),merged:true};j.deploymentPlan={revision:1,targets:['sandbox_frontend']};j.deploymentObservations={sandbox_frontend:{verified:true,targetId:'sandbox_frontend',commit:'c'.repeat(40),runId:123,runAttempt:1,workflowId:328868831,environment:'GitHub Pages',observedAt:at}};j.testReports=[{phase:'reproduction',commit:j.baseSha,kind:'regression',completedAt:at,exitCode:1,tests:j.snapshot.tests.map(t=>({caseId:t.id,caseVersion:t.version,result:'failed'}))},...['regression','integration','browser'].map(kind=>({phase:'candidate',commit:'b'.repeat(40),kind,completedAt:at,exitCode:0,tests:j.snapshot.tests.map(t=>({caseId:t.id,caseVersion:t.version,result:'passed'}))}))];});
+  await prepareStore.close();
+  await page.getByRole('button',{name:'Cancel',exact:true}).click();
+  await page.reload();
+  await page.getByRole('button',{name:'Issue backlog',exact:true}).click();
+  await page.getByRole('button',{name:'<script>literal issue title</script>',exact:true}).click();
+  await page.getByRole('button',{name:'Request post-deployment tests',exact:true}).click();
+  await expect(page.getByText('Post-deployment tests queued',{exact:true})).toBeVisible();
+  const verifyStore=await createStore({dataDir:'.local/e2e'});
+  await verifyStore.change(s=>{const call=(action,body)=>deliveryWorker(s,{method:'POST',path:'/automation/delivery/'+action,body});const claim=call('claim',{projectId,workerId:'codex-local'}),j=s.deliveries.find(j=>j.id===claim.job.id);for(const kind of ['regression','integration','browser'])call('report',{...claim.capability,report:{reportId:randomUUID(),phase:'post_deployment',targetId:'sandbox_frontend',kind,commit:'c'.repeat(40),environment:'GitHub Pages',startedAt:j.verificationBasis.queuedAt,completedAt:new Date().toISOString(),command:'browser protocol fixture',exitCode:0,tests:j.snapshot.tests.map(t=>({caseId:t.id,caseVersion:t.version,result:'passed',name:t.title})),summary:'Fixture only'}});call('finish',{...claim.capability,outcome:'ready_for_verification',summary:'Fixture verification completed'});});
+  await verifyStore.close();
+  await page.reload();
+  await page.getByRole('button',{name:'Issue backlog',exact:true}).click();
+  await page.getByRole('button',{name:'<script>literal issue title</script>',exact:true}).click();
+  await page.getByRole('button',{name:'Record verification decision',exact:true}).click();
+  await page.getByLabel('Verification notes').fill('Accepted fixture evidence');
+  await page.getByRole('button',{name:'Record decision',exact:true}).click();
+  await page.getByRole('button',{name:'<script>literal issue title</script>',exact:true}).click();
+  await expect(page.getByText('accept · Accepted fixture evidence',{exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Record verification decision',exact:true}).click();
+  await page.getByRole('combobox',{name:'Decision',exact:true}).selectOption('reopen');
+  await page.getByLabel('Verification notes').fill('Reopened fixture regression');
+  await page.getByRole('button',{name:'Record decision',exact:true}).click();
+  await page.getByRole('button',{name:'<script>literal issue title</script>',exact:true}).click();
+  await expect(page.getByText('reopen · Reopened fixture regression',{exact:true})).toBeVisible();
+
   await page.getByRole('button',{name:'Cancel',exact:true}).click();
   await page.getByRole('button',{name:'Repositories & CI',exact:true}).click();
   await page.getByRole('button',{name:'Disconnect polling',exact:true}).click();

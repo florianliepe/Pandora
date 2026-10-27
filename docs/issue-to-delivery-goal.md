@@ -141,3 +141,13 @@ existing revisions and observations; they are not a new fix produced by this goa
   stale reports, changed attempts and changed evidence. Dedicated browser acceptance of
   the decision controls, live n8n protocol validation and truthful test producers remain
   pending before publication, followed by the user-provided real pilot.
+- 2026-10-27 acceptance validation: browser coverage now exercises target selection,
+  verification queueing, explicit acceptance and reopening using isolated local evidence
+  fixtures. It passed. Fixed two lifecycle gaps: generic issue reopening now invalidates
+  accepted delivery, and a superseded handoff cannot be accepted after a newer one exists.
+  Added server regression coverage. The complete updated protocol also passed in an
+  authenticated temporary n8n memory sandbox, including target reports and accept/reopen;
+  no production issue/state changed, and the temporary workflow was removed. These tests
+  establish protocol/UI behavior, not a real deployed fix. Next implementation dependency:
+  a test producer that executes actual suites and maps individual results to pinned cases,
+  followed by public/internal workflow rollout and the user-selected real pilot.
