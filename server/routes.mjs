@@ -1,3 +1,4 @@
+import {automationView,setIssueAutomation,recordIssueEvent} from './issue-automation.mjs';
 import {selectDeploymentTargets} from './deployment-worker.mjs';
 import {queueDelivery,queueVerification,decideDelivery,deliveryClosureGate,reopenIssueDeliveries} from './delivery-worker.mjs';
 import {prepareDelivery,deliveryContext,cancelDelivery,publicJob,requestPullLink} from './delivery.mjs';
@@ -50,11 +51,13 @@ const mailReady=!!deliverMail;
     const data={project:s.projects.find(x=>x.id===p),role:m.role,members:s.members.filter(x=>x.projectId===p).map(x=>({...x,user:s.users.find(u=>u.id===x.userId)})),metrics:metrics(s,p),preferences:s.preferences.find(x=>x.projectId===p&&x.userId===req.user.id)||{muted:false}};
     for(const key of ['issues','iterations','cases','runs','events'])data[key]=s[key].filter(x=>x.projectId===p&&!x.deletedAt);
     data.deliveries=(s.deliveries||[]).filter(j=>j.projectId===p).map(j=>publicJob(s,j));
+    data.issueAutomation=automationView(s,p);
     data.attachments=s.attachments.filter(x=>x.projectId===p&&!x.deletedAt).map(({data,...x})=>x);
     for(const issue of data.issues){issue.testStatus=derivedTestStatus(s,issue);issue.iterationSuggestion=iterationSuggestion(s,issue);}
     data.notifications=s.notifications.filter(x=>x.projectId===p&&x.userId===req.user.id);
     res.json(data);
   });
+  app.put('/api/projects/:projectId/issue-automation',async(req,res)=>res.json(await store.change(s=>setIssueAutomation(s,req.params.projectId,req.user.id,req.body))));
   app.put('/api/projects/:projectId',async(req,res)=>{
     const {version,...raw}=req.body;const data=schemas.projects.parse(raw);
     const result=await store.change(s=>{const p=req.params.projectId;permit(s,p,req.user.id,['owner']);const old=s.projects.find(x=>x.id===p);if(old.version!==version)fail(409,'Project changed; reload before saving');if(data.mergePolicy==='agentic')fail(409,'Agentic merge is unavailable until phase-two checks and repository protection are implemented');const before={...old};Object.assign(old,data,{version:old.version+1,updatedAt:now()});audit(s,p,req.user.id,'project.updated',p,before,old);return old;});res.json(result);
@@ -82,7 +85,7 @@ const mailReady=!!deliverMail;
       const result=await store.change(s=>{const p=req.params.projectId;permit(s,p,req.user.id,collection==='iterations'?editors:contributors);validateRefs(s,p,data);
         if(collection==='issues'&&data.status!=='reported')fail(400,'New issues start as reported');
         const item={...data,id:id(),projectId:p,createdBy:req.user.id,createdAt:now(),updatedAt:now(),version:1};
-        if(collection==='issues'){queueTests(item);item.testStatus='not_run';}
+        if(collection==='issues'){queueTests(item);item.testStatus='not_run';recordIssueEvent(s,item,req.user.id,'created');}
         if(collection==='cases'){item.source='manual';item.manualEdited=true;item.reviewStatus='approved';}
         if(collection==='runs'){const c=s.cases.find(c=>c.id===data.caseId);if(c.issueId&&c.issueId!==data.issueId)fail(400,'Run must reference its test case issue');item.caseSnapshot=structuredClone(c);item.issueEvidenceRevision=s.issues.find(i=>i.id===data.issueId)?.evidenceRevision||1;}
         s[collection].push(item);syncTestStatuses(s,p);audit(s,p,req.user.id,`${collection}.created`,item.id,null,item);if(collection==='issues')notify(s,item,req.user.id,'reported');return item;
@@ -115,6 +118,7 @@ const mailReady=!!deliverMail;
         const before=structuredClone(item);Object.assign(item,data,{version:item.version+1,updatedAt:now()});
         if(collection==='issues'&&before.status!==item.status&&item.status==='reopened')reopenIssueDeliveries(s,item,req.user.id);
         if(collection==='issues'&&evidenceFields.some(k=>before[k]!==item[k]))queueTests(item);
+        if(collection==='issues')recordIssueEvent(s,item,req.user.id,'updated',before);
         if(collection==='cases'){item.manualEdited=true;item.reviewStatus='approved';}
         if(collection==='runs'){const c=s.cases.find(c=>c.id===data.caseId);if(c.issueId&&c.issueId!==data.issueId)fail(400,'Run must reference its test case issue');if(data.caseId!==before.caseId||data.issueId!==before.issueId){item.caseSnapshot=structuredClone(c);item.issueEvidenceRevision=s.issues.find(i=>i.id===data.issueId)?.evidenceRevision||1;}}
         syncTestStatuses(s,p);
@@ -129,10 +133,10 @@ const mailReady=!!deliverMail;
     const png=bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])),jpg=bytes[0]===255&&bytes[1]===216&&bytes[2]===255,webp=bytes.subarray(0,4).toString()==='RIFF'&&bytes.subarray(8,12).toString()==='WEBP';
     if(!({'image/png':png,'image/jpeg':jpg,'image/webp':webp}[file.type]))fail(400,'Invalid image content');
     const attachmentId=id();let uploaded=false;
-    try {await store.change(async s=>{const p=req.params.projectId;permit(s,p,req.user.id,contributors);const issue=s.issues.find(i=>i.id===req.params.id&&i.projectId===p&&!i.deletedAt);if(!issue)fail(404,'Issue not found');if(s.attachments.filter(a=>a.issueId===issue.id&&!a.deletedAt).length>=10)fail(400,'Maximum 10 screenshots per issue');const a={...file,id:attachmentId,projectId:p,issueId:issue.id,createdBy:req.user.id,createdAt:now(),size:bytes.length};if(blobs){await blobs.put(attachmentId,bytes,file.type);uploaded=true;delete a.data;a.blobName=attachmentId;}s.attachments.push(a);queueTests(issue);syncTestStatuses(s,p);audit(s,p,req.user.id,'attachment.created',a.id,null,{name:a.name,issueId:issue.id});});}catch(e){if(uploaded)await blobs.remove(attachmentId).catch(()=>{});throw e;}res.status(201).json({ok:true});
+    try {await store.change(async s=>{const p=req.params.projectId;permit(s,p,req.user.id,contributors);const issue=s.issues.find(i=>i.id===req.params.id&&i.projectId===p&&!i.deletedAt);if(!issue)fail(404,'Issue not found');if(s.attachments.filter(a=>a.issueId===issue.id&&!a.deletedAt).length>=10)fail(400,'Maximum 10 screenshots per issue');const a={...file,id:attachmentId,projectId:p,issueId:issue.id,createdBy:req.user.id,createdAt:now(),size:bytes.length};if(blobs){await blobs.put(attachmentId,bytes,file.type);uploaded=true;delete a.data;a.blobName=attachmentId;}s.attachments.push(a);queueTests(issue);recordIssueEvent(s,issue,req.user.id,'screenshot');syncTestStatuses(s,p);audit(s,p,req.user.id,'attachment.created',a.id,null,{name:a.name,issueId:issue.id});});}catch(e){if(uploaded)await blobs.remove(attachmentId).catch(()=>{});throw e;}res.status(201).json({ok:true});
   });
   app.get('/api/projects/:projectId/attachments/:id',async(req,res)=>{const s=await store.read(),p=req.params.projectId;member(s,p,req.user.id);const a=s.attachments.find(a=>a.id===req.params.id&&a.projectId===p&&!a.deletedAt);if(!a)fail(404,'Screenshot not found');res.type(a.type).send(a.blobName?await blobs.get(a.blobName):Buffer.from(a.data,'base64'));});
-  app.delete('/api/projects/:projectId/attachments/:id',async(req,res)=>{await store.change(s=>{const p=req.params.projectId;const m=permit(s,p,req.user.id,contributors);const a=s.attachments.find(a=>a.id===req.params.id&&a.projectId===p&&!a.deletedAt);if(!a)fail(404,'Screenshot not found');if(m.role==='tester'&&a.createdBy!==req.user.id)fail(403,'Only your own screenshots can be removed');a.deletedAt=now();const issue=s.issues.find(i=>i.id===a.issueId);if(issue)queueTests(issue);syncTestStatuses(s,p);audit(s,p,req.user.id,'attachment.archived',a.id);});res.json({ok:true});});
+  app.delete('/api/projects/:projectId/attachments/:id',async(req,res)=>{await store.change(s=>{const p=req.params.projectId;const m=permit(s,p,req.user.id,contributors);const a=s.attachments.find(a=>a.id===req.params.id&&a.projectId===p&&!a.deletedAt);if(!a)fail(404,'Screenshot not found');if(m.role==='tester'&&a.createdBy!==req.user.id)fail(403,'Only your own screenshots can be removed');a.deletedAt=now();const issue=s.issues.find(i=>i.id===a.issueId);if(issue){queueTests(issue);recordIssueEvent(s,issue,req.user.id,'screenshot');}syncTestStatuses(s,p);audit(s,p,req.user.id,'attachment.archived',a.id);});res.json({ok:true});});
   app.put('/api/projects/:projectId/preferences',async(req,res)=>{const muted=z.boolean().parse(req.body.muted);await store.change(s=>{const p=req.params.projectId;member(s,p,req.user.id);s.preferences=s.preferences.filter(x=>!(x.projectId===p&&x.userId===req.user.id));s.preferences.push({projectId:p,userId:req.user.id,muted});});res.json({ok:true});});
   app.post('/api/projects/:projectId/notifications/read',async(req,res)=>{await store.change(s=>{const p=req.params.projectId;member(s,p,req.user.id);for(const n of s.notifications)if(n.projectId===p&&n.userId===req.user.id)n.read=true;});res.json({ok:true});});
   app.post('/api/projects/:projectId/chat',async(req,res)=>{

@@ -1,0 +1,187 @@
+{
+  "schemaVersion": 1,
+  "classification": "nonproduction",
+  "purpose": "kg010-isolation-probe",
+  "source": {
+    "repository": "florianliepe/meids-app",
+    "commit": "26ab2f8c26744267c98804f7e7d0e5ff4584fea1",
+    "foundationTemplate": "infra/azure/main.bicep",
+    "dataPlaneTemplate": "infra/azure/production-data-plane.bicep",
+    "migrationDirectory": "backend/migrations",
+    "requiredMigrations": [
+      "001_production_data_model.sql",
+      "002_runtime_role.sql",
+      "003_runtime_trace_tables.sql",
+      "004_twin_profile_crud.sql",
+      "005_twin_active_timestamp_grant.sql",
+      "006_knowledge_persistence_outbox.sql",
+      "007_chunk_vector_and_review_state.sql",
+      "008_application_authorization_roles.sql",
+      "009_identity_jit_runtime_grants.sql",
+      "010_identity_jit_upsert_grants.sql",
+      "011_workspace_interaction_contracts.sql",
+      "012_audit_runtime_read_policy.sql",
+      "013_audit_runtime_insert_policy.sql",
+      "014_admin_cockpit_read_policies.sql",
+      "015_audit_skill_run_update_policy.sql"
+    ]
+  },
+  "azure": {
+    "subscriptionId": "25c9ce59-90a1-4e8a-a2d4-1853a19bce22",
+    "tenantId": "213a6ca3-4808-4047-8aca-814d2cde4474",
+    "location": "westeurope",
+    "resourceGroup": "rg-meids-kg010-np",
+    "expiresAfterHours": 168,
+    "tags": {
+      "application": "meids",
+      "environment": "kg010-nonproduction",
+      "workload": "pandora-isolation-probe",
+      "data-classification": "synthetic-only",
+      "managed-by": "bicep",
+      "delete-after": "operator-sets-at-deployment"
+    }
+  },
+  "resources": {
+    "appServicePlan": "asp-meids-kg010-weu",
+    "backend": "meids-kg010-backend-1853a19b",
+    "frontend": "meids-kg010-frontend-1853a19b",
+    "postgresServer": "psql-meids-kg010-1853a19b",
+    "database": "meids_kg010",
+    "storageAccount": "stmeidskg0101853a19b",
+    "searchService": "srch-meids-kg010-1853a19b",
+    "keyVault": "kv-meids-kg010-1853a19b",
+    "logAnalytics": "log-meids-kg010-weu",
+    "applicationInsights": "appi-meids-kg010-weu",
+    "vnet": "vnet-meids-kg010-weu",
+    "privateDnsPostgres": "kg010.private.postgres.database.azure.com"
+  },
+  "network": {
+    "vnetAddressPrefix": "10.43.0.0/16",
+    "appSubnetAddressPrefix": "10.43.1.0/24",
+    "databaseSubnetAddressPrefix": "10.43.2.0/24",
+    "privateEndpointSubnetAddressPrefix": "10.43.3.0/24",
+    "publicDataPlaneAccess": false
+  },
+  "database": {
+    "sku": "Standard_B1ms",
+    "storageSizeGb": 32,
+    "backupRetentionDays": 7,
+    "geoRedundantBackup": false,
+    "sameZoneHa": false,
+    "zoneRedundantHa": false,
+    "entraAdmin": {
+      "objectId": "a85b18b9-428a-4169-91e9-c7b1cc0d159e",
+      "displayName": "Me.IDs Production PostgreSQL Administrators",
+      "principalType": "Group"
+    },
+    "runtimePrincipal": {
+      "type": "backend-system-assigned-managed-identity",
+      "name": "meids-kg010-backend-1853a19b",
+      "databaseRole": "meids_app_runtime",
+      "superuser": false,
+      "bypassRls": false,
+      "canRunMigrations": false
+    },
+    "authentication": "entra-only"
+  },
+  "storage": {
+    "sku": "Standard_LRS",
+    "sharedKeyAccess": false,
+    "containers": ["source", "working", "approved", "learning", "quarantine", "export"],
+    "syntheticBlobKeyTemplate": "kg010/{runId}/{principal}/fixture.txt"
+  },
+  "search": {
+    "sku": "basic",
+    "localAuthDisabled": true,
+    "approvedIndex": "meids-kg010-approved-v1",
+    "workingIndex": "meids-kg010-working-v1",
+    "apiVersion": "2025-09-01",
+    "vectorDimensions": 1536
+  },
+  "graph": {
+    "storage": "postgres-projection",
+    "apiPath": "/api/okf/graph",
+    "syntheticMarkerPrefix": "pandora-kg010-"
+  },
+  "backend": {
+    "storageMode": "postgres",
+    "databaseSchemaManaged": true,
+    "databaseAuthorizationEnabled": true,
+    "knowledgeAuthorizationEnforced": true,
+    "outboxProjectorEnabled": true,
+    "outboxBatchSize": 10,
+    "outboxIntervalMs": 5000,
+    "searchAuthMode": "managed_identity",
+    "bootstrapDenyOrigin": "https://kg010.invalid",
+    "signingSecretName": "meids-kg010-auth-context-signing-key"
+  },
+  "sharedControlPlane": {
+    "mode": "disabled",
+    "n8nOrigin": "",
+    "actorTwinWebhookPath": "",
+    "knowledgeFabricWebhookPath": "",
+    "agenticButlerWebhookPath": "",
+    "reuseRequires": "isolated-workflow-clones-with-reviewed-kg010-resource-bindings"
+  },
+  "identity": {
+    "mode": "two-independent-delegated-users",
+    "application": {
+      "registration": "dedicated-kg010",
+      "displayName": "Me.IDs KG010 Nonproduction",
+      "audience": "api://meids-kg010",
+      "tenantIdSource": "azure.tenantId",
+      "assignmentRequired": true,
+      "clientIdSource": "operator-runtime-binding",
+      "clientSecretSource": "dedicated-key-vault-runtime-binding",
+      "backendEasyAuth": {
+        "enabled": true,
+        "requireAuthentication": true,
+        "unauthenticatedClientAction": "Return401",
+        "allowedAudience": "api://meids-kg010",
+        "clientIdSettingName": "KG010_ENTRA_CLIENT_ID",
+        "clientSecretSettingName": "KG010_ENTRA_CLIENT_SECRET"
+      }
+    },
+    "principals": [
+      {
+        "label": "principal_a",
+        "credentialSecretName": "PANDORA_KG010_PRINCIPAL_A_TOKEN",
+        "expectedTwinIdTemplate": "{runMarker}-principal_a"
+      },
+      {
+        "label": "principal_b",
+        "credentialSecretName": "PANDORA_KG010_PRINCIPAL_B_TOKEN",
+        "expectedTwinIdTemplate": "{runMarker}-principal_b"
+      }
+    ],
+    "committedObjectIds": false,
+    "mutateEntraMembership": false
+  },
+  "cleanup": {
+    "mode": "exact-run-inventory",
+    "wildcardsAllowed": false,
+    "deleteEntraUsersOrGroups": false,
+    "deleteRunCreatedTwinAssignments": true,
+    "requireOutboxDrained": true,
+    "destroyResourceGroupAfterEvidenceExport": true,
+    "resourceGroupMustEqual": "rg-meids-kg010-np"
+  },
+  "costControl": {
+    "currency": "EUR",
+    "billingScope": "maximum-seven-day-disposable-environment",
+    "estimateStatus": "operator-required",
+    "approvedBudget": null,
+    "requiredAction": "confirm-current-prices-with-azure-pricing-calculator-before-deployment"
+  },
+  "forbiddenResources": [
+    "rg-ai-intellectual-twin",
+    "meids-prod-backend-1853a19b",
+    "psql-meids-prod-1853a19b",
+    "meids_prod",
+    "stmeidsprod1853a19b",
+    "srch-meids-prod-1853a19b",
+    "meids-backend-1853a19b",
+    "steraxknowledge1853a19b",
+    "srch-intellectual-twin"
+  ]
+}

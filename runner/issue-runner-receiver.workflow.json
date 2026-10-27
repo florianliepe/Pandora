@@ -1,0 +1,1965 @@
+{
+  "name": "Pandora | unattended issue runner receiver",
+  "nodes": [
+    {
+      "id": "runner-callback",
+      "name": "Runner callback",
+      "type": "n8n-nodes-base.webhook",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "pandora-issue-runner-v1",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "pandora-issue-runner-v1",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "ngpBFvJOlm8BMUif",
+          "name": "Pandora unattended runner (Intellectual Twin)"
+        }
+      }
+    },
+    {
+      "id": "scope-exact-operation",
+      "name": "Scope exact operation",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "const input=$json;if(input.headers?.origin)throw Error('Browser access is not supported');const request=typeof input.body==='string'?JSON.parse(input.body):input.body;const issue=new Set(['preflight','start','status','cancelled','publish','merge','verification-start']);const delivery=new Set(['renew','evidence','report','finish']);if(!request||request.schemaVersion!==1||(!issue.has(request.operation)&&!delivery.has(request.operation))||typeof request.eventId!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(request.eventId)||!Number.isSafeInteger(request.runId)||request.runId<=0||JSON.stringify(request).length>2200000)throw Error('Invalid runner callback');const proposed=new Set(['merge','verification-start']);const path=request.operation==='preflight'?'/automation/issues/preflight':request.operation==='publish'?'/automation/issues/publish-prepare':request.operation==='cancelled'?'/automation/issues/status':proposed.has(request.operation)?'/automation/issues/'+(request.operation==='merge'?'merge-prepare':request.operation):(issue.has(request.operation)?'/automation/issues/':'/automation/delivery/')+request.operation;const body={...(request.body||{}),projectId:'3daa1c59-cd24-487b-a8e4-dc5d930e41f0'};if(request.operation==='preflight'){body.runId=request.runId;body.syntheticEventId=request.eventId;}if(request.operation==='start'||request.operation==='status'||request.operation==='cancelled'){body.eventId=request.eventId;body.runId=request.runId;}if(delivery.has(request.operation))body.workerId='codex-local';if(request.operation==='publish'||proposed.has(request.operation)){body.eventId=request.eventId;body.runId=request.runId;body.workerId='codex-local';}return [{json:{operation:request.operation,eventId:request.eventId,runId:request.runId,path,method:'POST',body}}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        280,
+        0
+      ]
+    },
+    {
+      "id": "authorize-request",
+      "name": "Authorize request",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "KblOJCQpInwzyg1a"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "path": "={{ $json.path }}",
+            "method": "POST",
+            "body": "={{ $json.body }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "typeVersion": 1.2,
+      "position": [
+        560,
+        0
+      ]
+    },
+    {
+      "id": "cancellation-requested",
+      "name": "Cancellation requested",
+      "type": "n8n-nodes-base.if",
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cancelled",
+              "leftValue": "={{ $('Scope exact operation').first().json.operation }}",
+              "rightValue": "cancelled",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "typeVersion": 2.2,
+      "position": [
+        840,
+        0
+      ]
+    },
+    {
+      "id": "verify-cancellation-binding",
+      "name": "Verify cancellation binding",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "const response=$json,scope=$('Scope exact operation').first().json;if(response.status!==200||response.body?.state!=='cancellation_requested'||response.body?.continue!==false)throw Error('Cancellation does not match an active requested event run');return [{json:{projectId:'3daa1c59-cd24-487b-a8e4-dc5d930e41f0',eventId:scope.eventId}}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        1120,
+        0
+      ]
+    },
+    {
+      "id": "acknowledge-cancellation",
+      "name": "Acknowledge cancellation",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "KblOJCQpInwzyg1a"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "path": "/automation/issues/cancelled",
+            "method": "POST",
+            "body": "={{ $json }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        240
+      ]
+    },
+    {
+      "id": "publication-requested",
+      "name": "Publication requested",
+      "type": "n8n-nodes-base.if",
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "publish",
+              "leftValue": "={{ $('Scope exact operation').first().json.operation }}",
+              "rightValue": "publish",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "typeVersion": 2.2,
+      "position": [
+        280,
+        240
+      ]
+    },
+    {
+      "id": "validate-prepared-publication",
+      "name": "Validate prepared publication",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "const response=$json,p=response?.body?.publish;if(response.status!==200||!p||p.projectId!=='3daa1c59-cd24-487b-a8e4-dc5d930e41f0'||p.repository!=='florianliepe/meids-app'||!/^pandora\\/[0-9a-f-]{36}$/.test(p.branch)||!Array.isArray(p.files)||!p.files.length||p.files.length>100||!p.commit?.author||!p.commit?.committer)throw Error('Store did not authorize publication');return [{json:p}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        560,
+        240
+      ]
+    },
+    {
+      "id": "read-current-main",
+      "name": "Read current main",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.github.com/repos/florianliepe/meids-app/git/ref/heads/main",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "typeVersion": 4.2,
+      "position": [
+        840,
+        240
+      ],
+      "credentials": {
+        "githubApi": {
+          "id": "3V46mglu7fpoPISX",
+          "name": "GitHub account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "verify-pinned-main",
+      "name": "Verify pinned main",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "const p=$('Validate prepared publication').first().json;if($json.statusCode!==200||$json.body?.object?.type!=='commit'||$json.body.object.sha!==p.baseSha)throw Error('Source main changed after issue claim');return [{json:p}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        1120,
+        240
+      ]
+    },
+    {
+      "id": "read-base-commit",
+      "name": "Read base commit",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.github.com/repos/florianliepe/meids-app/git/commits/{{ $json.baseSha }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        480
+      ],
+      "credentials": {
+        "githubApi": {
+          "id": "3V46mglu7fpoPISX",
+          "name": "GitHub account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "prepare-tree",
+      "name": "Prepare tree",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "const p=$('Validate prepared publication').first().json;if($json.statusCode!==200||$json.body?.sha!==p.baseSha||!$json.body?.tree?.sha)throw Error('Pinned base commit unavailable');return [{json:{...p,baseTree:$json.body.tree.sha,tree:p.files.map(f=>f.content===null?{path:f.path,mode:'100644',type:'blob',sha:null}:{path:f.path,mode:'100644',type:'blob',content:f.content})}}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        280,
+        480
+      ]
+    },
+    {
+      "id": "create-tree",
+      "name": "Create tree",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.github.com/repos/florianliepe/meids-app/git/trees",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {base_tree:$json.baseTree,tree:$json.tree} }}",
+        "options": {
+          "timeout": 20000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "typeVersion": 4.2,
+      "position": [
+        560,
+        480
+      ],
+      "credentials": {
+        "githubApi": {
+          "id": "3V46mglu7fpoPISX",
+          "name": "GitHub account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "prepare-commit",
+      "name": "Prepare commit",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "const p=$('Prepare tree').first().json;if($json.statusCode!==201||!$json.body?.sha)throw Error('GitHub tree creation failed');return [{json:{...p,treeSha:$json.body.sha}}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        840,
+        480
+      ]
+    },
+    {
+      "id": "create-deterministic-commit",
+      "name": "Create deterministic commit",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.github.com/repos/florianliepe/meids-app/git/commits",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {message:$json.commit.message,tree:$json.treeSha,parents:[$json.baseSha],author:$json.commit.author,committer:$json.commit.committer} }}",
+        "options": {
+          "timeout": 20000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        480
+      ],
+      "credentials": {
+        "githubApi": {
+          "id": "3V46mglu7fpoPISX",
+          "name": "GitHub account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "prepare-ref",
+      "name": "Prepare ref",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "const p=$('Prepare commit').first().json;if($json.statusCode!==201||!$json.body?.sha)throw Error('GitHub commit creation failed');return [{json:{...p,commitSha:$json.body.sha}}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        0,
+        720
+      ]
+    },
+    {
+      "id": "create-branch-ref",
+      "name": "Create branch ref",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.github.com/repos/florianliepe/meids-app/git/refs",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {ref:'refs/heads/'+$json.branch,sha:$json.commitSha} }}",
+        "options": {
+          "timeout": 20000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "typeVersion": 4.2,
+      "position": [
+        280,
+        720
+      ],
+      "credentials": {
+        "githubApi": {
+          "id": "3V46mglu7fpoPISX",
+          "name": "GitHub account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "validate-ref-creation",
+      "name": "Validate ref creation",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "if(![201,422].includes($json.statusCode))throw Error('GitHub branch creation failed');return [{json:$('Prepare ref').first().json}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        560,
+        720
+      ]
+    },
+    {
+      "id": "read-exact-branch",
+      "name": "Read exact branch",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.github.com/repos/florianliepe/meids-app/git/ref/heads/{{ $json.branch }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "typeVersion": 4.2,
+      "position": [
+        840,
+        720
+      ],
+      "credentials": {
+        "githubApi": {
+          "id": "3V46mglu7fpoPISX",
+          "name": "GitHub account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "verify-exact-branch",
+      "name": "Verify exact branch",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "const p=$('Prepare ref').first().json;if($json.statusCode!==200||$json.body?.object?.type!=='commit'||$json.body.object.sha!==p.commitSha)throw Error('Existing branch does not match deterministic commit');return [{json:p}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        1120,
+        720
+      ]
+    },
+    {
+      "id": "create-pull-request",
+      "name": "Create pull request",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.github.com/repos/florianliepe/meids-app/pulls",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {title:'Pandora issue repair',head:$json.branch,base:'main',body:'Pandora-Delivery: '+$json.jobId} }}",
+        "options": {
+          "timeout": 20000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        960
+      ],
+      "credentials": {
+        "githubApi": {
+          "id": "3V46mglu7fpoPISX",
+          "name": "GitHub account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "validate-pull-creation",
+      "name": "Validate pull creation",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "if(![201,422].includes($json.statusCode))throw Error('GitHub pull request creation failed');return [{json:$('Verify exact branch').first().json}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        280,
+        960
+      ]
+    },
+    {
+      "id": "read-exact-pull-request",
+      "name": "Read exact pull request",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.github.com/repos/florianliepe/meids-app/pulls?state=all&head=florianliepe:{{ $json.branch }}&base=main&per_page=100",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "typeVersion": 4.2,
+      "position": [
+        560,
+        960
+      ],
+      "credentials": {
+        "githubApi": {
+          "id": "3V46mglu7fpoPISX",
+          "name": "GitHub account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "verify-exact-pull-request",
+      "name": "Verify exact pull request",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "const p=$('Verify exact branch').first().json,marker='Pandora-Delivery: '+p.jobId;if($json.statusCode!==200||!Array.isArray($json.body))throw Error('Pull request lookup failed');const matches=$json.body.filter(x=>x.base?.repo?.full_name==='florianliepe/meids-app'&&x.base?.ref==='main'&&x.head?.repo?.full_name==='florianliepe/meids-app'&&x.head?.ref===p.branch&&x.head?.sha===p.commitSha&&typeof x.body==='string'&&x.body.split(/\\r?\\n/).some(line=>line.trim()===marker));if(matches.length!==1)throw Error('Exact correlated pull request was not found');return [{json:{publish:p,pull:matches[0]}}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        840,
+        960
+      ]
+    },
+    {
+      "id": "complete-publication",
+      "name": "Complete publication",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "KblOJCQpInwzyg1a"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "path": "/automation/issues/publish-complete",
+            "method": "POST",
+            "body": "={{ {projectId:$json.publish.projectId,eventId:$json.publish.eventId,runId:$json.publish.runId,jobId:$json.publish.jobId,requestId:$json.publish.requestId,headSha:$json.publish.commitSha,pull:$json.pull} }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "typeVersion": 1.2,
+      "position": [
+        1120,
+        960
+      ]
+    },
+    {
+      "id": "evidence-requested",
+      "name": "Evidence requested",
+      "type": "n8n-nodes-base.if",
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "evidence",
+              "leftValue": "={{ $('Scope exact operation').first().json.operation }}",
+              "rightValue": "evidence",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        1200
+      ]
+    },
+    {
+      "id": "load-pinned-screenshot-blob",
+      "name": "Load pinned screenshot blob",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.github.com/repos/florianliepe/Pandora-data/git/blobs/{{ $json.body.evidence.sha }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "typeVersion": 4.2,
+      "position": [
+        280,
+        1200
+      ],
+      "credentials": {
+        "githubApi": {
+          "id": "3V46mglu7fpoPISX",
+          "name": "GitHub account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "verify-screenshot-blob",
+      "name": "Verify screenshot blob",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "const e=$('Authorize request').first().json.body?.evidence,b=$json.body;if(!e||$json.statusCode!==200||b?.sha!==e.sha||b.size>5*1024*1024||typeof b.content!=='string'||b.encoding!=='base64')throw Error('Pinned screenshot could not be retrieved');const data=b.content.replace(/\\s/g,'');return [{json:{status:200,body:{file:{name:e.name,type:e.type,data,sha:e.sha,size:b.size}}}}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        560,
+        1200
+      ]
+    },
+    {
+      "id": "return-no-store-json",
+      "name": "Return no-store JSON",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              },
+              {
+                "name": "X-Content-Type-Options",
+                "value": "nosniff"
+              }
+            ]
+          }
+        }
+      },
+      "typeVersion": 1.4,
+      "position": [
+        840,
+        1200
+      ]
+    },
+    {
+      "id": "request-authorized",
+      "name": "Request authorized",
+      "type": "n8n-nodes-base.if",
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "Request authorized",
+              "leftValue": "={{ String($json.status) }}",
+              "rightValue": "200",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "typeVersion": 2.2,
+      "position": [
+        1120,
+        1200
+      ]
+    },
+    {
+      "id": "merge-requested",
+      "name": "Merge requested",
+      "type": "n8n-nodes-base.if",
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "Merge requested",
+              "leftValue": "={{ $('Scope exact operation').first().json.operation }}",
+              "rightValue": "merge",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        1440
+      ]
+    },
+    {
+      "id": "validate-prepared-merge",
+      "name": "Validate prepared merge",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "const m=$json.body?.merge;if(!m||m.repository!=='florianliepe/meids-app'||!Number.isSafeInteger(m.pullNumber)||!/^[a-f0-9]{40}$/.test(m.headSha))throw Error('Store did not authorize merge observation');return [{json:m}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        280,
+        1440
+      ]
+    },
+    {
+      "id": "read-merge-pr",
+      "name": "Read merge PR",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.github.com/repos/florianliepe/meids-app/pulls/{{ $json.pullNumber }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "typeVersion": 4.2,
+      "position": [
+        560,
+        1440
+      ],
+      "credentials": {
+        "githubApi": {
+          "id": "3V46mglu7fpoPISX",
+          "name": "GitHub account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "check-merge-pr-response",
+      "name": "Check merge PR response",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "if($json.statusCode!==200)throw Error('PR unavailable');return [{json:$('Validate prepared merge').first().json}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        840,
+        1440
+      ]
+    },
+    {
+      "id": "read-enforced-protection",
+      "name": "Read enforced protection",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.github.com/repos/florianliepe/meids-app/branches/main/protection",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        1440
+      ],
+      "credentials": {
+        "githubApi": {
+          "id": "3V46mglu7fpoPISX",
+          "name": "GitHub account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "check-protection-response",
+      "name": "Check protection response",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "if($json.statusCode!==200)throw Error('Branch protection unavailable');return [{json:$('Validate prepared merge').first().json}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        0,
+        1680
+      ]
+    },
+    {
+      "id": "read-exact-head-checks",
+      "name": "Read exact head checks",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.github.com/repos/florianliepe/meids-app/commits/{{ $json.headSha }}/check-runs?per_page=100&filter=latest",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "typeVersion": 4.2,
+      "position": [
+        280,
+        1680
+      ],
+      "credentials": {
+        "githubApi": {
+          "id": "3V46mglu7fpoPISX",
+          "name": "GitHub account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "check-head-checks-response",
+      "name": "Check head checks response",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "if($json.statusCode!==200)throw Error('Required checks unavailable');return [{json:$('Validate prepared merge').first().json}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        560,
+        1680
+      ]
+    },
+    {
+      "id": "read-merge-base",
+      "name": "Read merge base",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.github.com/repos/florianliepe/meids-app/git/ref/heads/main",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "typeVersion": 4.2,
+      "position": [
+        840,
+        1680
+      ],
+      "credentials": {
+        "githubApi": {
+          "id": "3V46mglu7fpoPISX",
+          "name": "GitHub account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "prepare-merge-observations",
+      "name": "Prepare merge observations",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "if($json.statusCode!==200||$json.body?.object?.type!=='commit')throw Error('Source base unavailable');return [{json:{...$('Scope exact operation').first().json.body,observedAt:new Date().toISOString(),mainSha:$json.body.object.sha,pull:$('Read merge PR').first().json.body,protection:$('Read enforced protection').first().json.body,checks:$('Read exact head checks').first().json.body}}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        1120,
+        1680
+      ]
+    },
+    {
+      "id": "authorize-exact-merge",
+      "name": "Authorize exact merge",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "KblOJCQpInwzyg1a"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "path": "/automation/issues/merge-authorize",
+            "method": "POST",
+            "body": "={{ $json }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        1920
+      ]
+    },
+    {
+      "id": "validate-merge-authorization",
+      "name": "Validate merge authorization",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "const a=$json.body?.authorization;if($json.status!==200||!a||a.repository!=='florianliepe/meids-app')throw Error('Merge requirements not satisfied');return [{json:a}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        280,
+        1920
+      ]
+    },
+    {
+      "id": "consume-merge-authorization",
+      "name": "Consume merge authorization",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "KblOJCQpInwzyg1a"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "path": "/automation/issues/merge-consume",
+            "method": "POST",
+            "body": "={{ {projectId:$json.projectId,eventId:$json.eventId,runId:$json.runId,jobId:$json.jobId,authorizationId:$json.id} }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "typeVersion": 1.2,
+      "position": [
+        560,
+        1920
+      ]
+    },
+    {
+      "id": "validate-consumed-merge",
+      "name": "Validate consumed merge",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "const m=$json.body?.merge;if($json.status!==200||!m||m.repository!=='florianliepe/meids-app'||m.method!=='merge')throw Error('Merge authorization revoked');return [{json:m}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        840,
+        1920
+      ]
+    },
+    {
+      "id": "merge-exact-revision",
+      "name": "Merge exact revision",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://api.github.com/repos/florianliepe/meids-app/pulls/{{ $json.pullNumber }}/merge",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {sha:$json.headSha,merge_method:'merge'} }}",
+        "options": {
+          "timeout": 20000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        1920
+      ],
+      "credentials": {
+        "githubApi": {
+          "id": "3V46mglu7fpoPISX",
+          "name": "GitHub account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "check-merge-submission",
+      "name": "Check merge submission",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "if($json.statusCode!==200||$json.body?.merged!==true)throw Error('Merge not confirmed; do not retry an ambiguous submission');return [{json:$('Validate consumed merge').first().json}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        0,
+        2160
+      ]
+    },
+    {
+      "id": "read-merged-pr",
+      "name": "Read merged PR",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.github.com/repos/florianliepe/meids-app/pulls/{{ $json.pullNumber }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "typeVersion": 4.2,
+      "position": [
+        280,
+        2160
+      ],
+      "credentials": {
+        "githubApi": {
+          "id": "3V46mglu7fpoPISX",
+          "name": "GitHub account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "prepare-merge-confirmation",
+      "name": "Prepare merge confirmation",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "if($json.statusCode!==200||$json.body?.merge_commit_sha!==$('Merge exact revision').first().json.body.sha)throw Error('Merged revision not independently confirmed');const a=$('Validate merge authorization').first().json;return [{json:{projectId:a.projectId,eventId:a.eventId,runId:a.runId,jobId:a.jobId,authorizationId:a.id,pull:$json.body}}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        560,
+        2160
+      ]
+    },
+    {
+      "id": "record-confirmed-merge",
+      "name": "Record confirmed merge",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "KblOJCQpInwzyg1a"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "path": "/automation/issues/merge-complete",
+            "method": "POST",
+            "body": "={{ $json }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "typeVersion": 1.2,
+      "position": [
+        840,
+        2160
+      ]
+    }
+  ],
+  "connections": {
+    "Runner callback": {
+      "main": [
+        [
+          {
+            "node": "Scope exact operation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scope exact operation": {
+      "main": [
+        [
+          {
+            "node": "Authorize request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Authorize request": {
+      "main": [
+        [
+          {
+            "node": "Request authorized",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cancellation requested": {
+      "main": [
+        [
+          {
+            "node": "Verify cancellation binding",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Publication requested",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify cancellation binding": {
+      "main": [
+        [
+          {
+            "node": "Acknowledge cancellation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Acknowledge cancellation": {
+      "main": [
+        [
+          {
+            "node": "Return no-store JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Publication requested": {
+      "main": [
+        [
+          {
+            "node": "Validate prepared publication",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Evidence requested",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evidence requested": {
+      "main": [
+        [
+          {
+            "node": "Load pinned screenshot blob",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return no-store JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load pinned screenshot blob": {
+      "main": [
+        [
+          {
+            "node": "Verify screenshot blob",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify screenshot blob": {
+      "main": [
+        [
+          {
+            "node": "Return no-store JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate prepared publication": {
+      "main": [
+        [
+          {
+            "node": "Read current main",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read current main": {
+      "main": [
+        [
+          {
+            "node": "Verify pinned main",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify pinned main": {
+      "main": [
+        [
+          {
+            "node": "Read base commit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read base commit": {
+      "main": [
+        [
+          {
+            "node": "Prepare tree",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare tree": {
+      "main": [
+        [
+          {
+            "node": "Create tree",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create tree": {
+      "main": [
+        [
+          {
+            "node": "Prepare commit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare commit": {
+      "main": [
+        [
+          {
+            "node": "Create deterministic commit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create deterministic commit": {
+      "main": [
+        [
+          {
+            "node": "Prepare ref",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare ref": {
+      "main": [
+        [
+          {
+            "node": "Create branch ref",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create branch ref": {
+      "main": [
+        [
+          {
+            "node": "Validate ref creation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate ref creation": {
+      "main": [
+        [
+          {
+            "node": "Read exact branch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read exact branch": {
+      "main": [
+        [
+          {
+            "node": "Verify exact branch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify exact branch": {
+      "main": [
+        [
+          {
+            "node": "Create pull request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create pull request": {
+      "main": [
+        [
+          {
+            "node": "Validate pull creation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate pull creation": {
+      "main": [
+        [
+          {
+            "node": "Read exact pull request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read exact pull request": {
+      "main": [
+        [
+          {
+            "node": "Verify exact pull request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify exact pull request": {
+      "main": [
+        [
+          {
+            "node": "Complete publication",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Complete publication": {
+      "main": [
+        [
+          {
+            "node": "Return no-store JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Request authorized": {
+      "main": [
+        [
+          {
+            "node": "Merge requested",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return no-store JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge requested": {
+      "main": [
+        [
+          {
+            "node": "Validate prepared merge",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Cancellation requested",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate prepared merge": {
+      "main": [
+        [
+          {
+            "node": "Read merge PR",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read merge PR": {
+      "main": [
+        [
+          {
+            "node": "Check merge PR response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check merge PR response": {
+      "main": [
+        [
+          {
+            "node": "Read enforced protection",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read enforced protection": {
+      "main": [
+        [
+          {
+            "node": "Check protection response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check protection response": {
+      "main": [
+        [
+          {
+            "node": "Read exact head checks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read exact head checks": {
+      "main": [
+        [
+          {
+            "node": "Check head checks response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check head checks response": {
+      "main": [
+        [
+          {
+            "node": "Read merge base",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read merge base": {
+      "main": [
+        [
+          {
+            "node": "Prepare merge observations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare merge observations": {
+      "main": [
+        [
+          {
+            "node": "Authorize exact merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Authorize exact merge": {
+      "main": [
+        [
+          {
+            "node": "Validate merge authorization",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate merge authorization": {
+      "main": [
+        [
+          {
+            "node": "Consume merge authorization",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consume merge authorization": {
+      "main": [
+        [
+          {
+            "node": "Validate consumed merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate consumed merge": {
+      "main": [
+        [
+          {
+            "node": "Merge exact revision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge exact revision": {
+      "main": [
+        [
+          {
+            "node": "Check merge submission",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check merge submission": {
+      "main": [
+        [
+          {
+            "node": "Read merged PR",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read merged PR": {
+      "main": [
+        [
+          {
+            "node": "Prepare merge confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare merge confirmation": {
+      "main": [
+        [
+          {
+            "node": "Record confirmed merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Record confirmed merge": {
+      "main": [
+        [
+          {
+            "node": "Return no-store JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "none",
+    "saveManualExecutions": false,
+    "executionTimeout": 180
+  }
+}

@@ -26,6 +26,17 @@ test('project creator becomes owner; existing projects require membership',async
   assert.equal((await call(path()+'/members','POST',{email:outsider.user.email,role:'owner'},developer.token)).status,403);
 });
 test('last owner cannot be removed or downgraded',async()=>{assert.equal((await call(path()+'/members/'+owner.user.id,'DELETE',null,owner.token)).status,400);assert.equal((await call(path()+'/members','POST',{email:owner.user.email,role:'viewer'},owner.token)).status,400);});
+
+test('automation API rejects nonowners, forged readiness and unconfigured Start',async()=>{
+ const endpoint=path()+'/issue-automation';
+ assert.equal((await call(endpoint,'PUT',{enabled:true,revision:0},developer.token)).status,403);
+ assert.equal((await call(endpoint,'PUT',{enabled:true,revision:0,ready:true},owner.token)).status,400);
+ assert.equal((await call(endpoint,'PUT',{enabled:true,revision:0},owner.token)).status,409);
+ assert.equal((await call(endpoint,'PUT',{enabled:false,revision:0},owner.token)).status,200);
+ assert.equal((await call(endpoint,'PUT',{enabled:false,revision:0},owner.token)).status,409);
+ assert.equal((await call('/automation/issues/tasks','POST',{projectId:project.id},owner.token)).status,404);
+ assert.equal((await call(path(),'GET',null,owner.token)).data.issueAutomation.enabled,false);
+});
 test('roles restrict writes and project-scoped references',async()=>{
   assert.equal((await call(path()+'/issues','POST',{title:'Viewer cannot write'},viewer.token)).status,403);
   assert.equal((await call(path()+'/iterations','POST',{name:'Iteration',startDate:'2026-10-01',endDate:'2026-10-14'},tester.token)).status,403);

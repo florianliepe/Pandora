@@ -1,0 +1,121 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "environment": {
+      "value": "uat"
+    },
+    "location": {
+      "value": "westeurope"
+    },
+    "keyVaultLocation": {
+      "value": "westeurope"
+    },
+    "tags": {
+      "value": {
+        "application": "meids",
+        "environment": "kg010-nonproduction",
+        "workload": "pandora-isolation-probe",
+        "data-classification": "synthetic-only",
+        "managed-by": "bicep",
+        "delete-after": "operator-sets-at-deployment"
+      }
+    },
+    "appServicePlanName": {
+      "value": "asp-meids-kg010-weu"
+    },
+    "createAppServicePlan": {
+      "value": true
+    },
+    "backendName": {
+      "value": "meids-kg010-backend-1853a19b"
+    },
+    "staticWebAppName": {
+      "value": "meids-kg010-frontend-1853a19b"
+    },
+    "searchName": {
+      "value": "srch-meids-kg010-1853a19b"
+    },
+    "searchSku": {
+      "value": "basic"
+    },
+    "disableSearchLocalAuth": {
+      "value": true
+    },
+    "privateDataPlaneEnabled": {
+      "value": true
+    },
+    "storageName": {
+      "value": "stmeidskg0101853a19b"
+    },
+    "storageSku": {
+      "value": "Standard_LRS"
+    },
+    "keyVaultName": {
+      "value": "kv-meids-kg010-1853a19b"
+    },
+    "logAnalyticsName": {
+      "value": "log-meids-kg010-weu"
+    },
+    "appInsightsName": {
+      "value": "appi-meids-kg010-weu"
+    },
+    "approvedSearchIndex": {
+      "value": "meids-kg010-approved-v1"
+    },
+    "workingSearchIndex": {
+      "value": "meids-kg010-working-v1"
+    },
+    "azureOpenAiEmbeddingDimensions": {
+      "value": 1536
+    },
+    "allowedFrontendOrigins": {
+      "value": "https://kg010.invalid"
+    },
+    "actorTwinWebhookUrl": {
+      "value": ""
+    },
+    "knowledgeFabricWebhookUrl": {
+      "value": ""
+    },
+    "agenticButlerWebhookUrl": {
+      "value": ""
+    },
+    "n8nApiBaseUrl": {
+      "value": ""
+    },
+    "enableKeyVaultPurgeProtection": {
+      "value": false
+    },
+    "allowStorageSharedKeyAccess": {
+      "value": false
+    },
+    "enableKnowledgeAuthorization": {
+      "value": true
+    },
+    "knowledgeAuthorizationSigningSecretName": {
+      "value": "meids-kg010-auth-context-signing-key"
+    },
+    "searchRoleAssignmentName": {
+      "value": "ffb2b5eb-a49f-406c-b420-027dc9855946"
+    },
+    "storageRoleAssignmentName": {
+      "value": "bf2b7024-9795-4855-b65a-bbde2c569fa5"
+    },
+    "vaultRoleAssignmentName": {
+      "value": "5d3d732b-8029-48fa-b548-84030c212e26"
+    },
+    "backendDiagnosticSettingName": {
+      "value": "diag-meids-kg010-backend"
+    },
+    "searchDiagnosticSettingName": {
+      "value": "diag-meids-kg010-search"
+    },
+    "storageDiagnosticSettingName": {
+      "value": "diag-meids-kg010-blob"
+    },
+    "vaultDiagnosticSettingName": {
+      "value": "diag-meids-kg010-vault"
+    }
+  }
+}

@@ -185,3 +185,155 @@ existing revisions and observations; they are not a new fix produced by this goa
   no retained diagnostic payload; a subsequent instrumented invocation succeeded with one
   project updated, no pipeline/deployment errors and zero eligible deployment targets.
   Temporary check workflows were removed. The initial failure's cause is unconfirmed.
+- 2026-10-27 revision probes deployed after explicit user approval and confirmation with
+  the Intellectual Twin development chat. Source PR #23 merged as
+  12736854d7019bf570ab99a1f6fe40d69b193414. GitHub deployment runs succeeded:
+  SWA 40499095800, backend 40499095832 and Pages 40499095792. Live probes in all three
+  environments passed Pandora's exact repository/commit/workflow/run/attempt verifier.
+  The approved authsettingsV2 change added only /api/build-info. Complete before/after
+  properties comparison confirmed all other settings and eight prior exclusions preserved.
+  After propagation, backend /api/build-info returned 200 with Cache-Control: no-store;
+  /api/health and /api/session continued returning 401. No shared n8n restart occurred.
+  Private full configuration snapshots are retained locally, not committed. Development
+  chat was informed. The source merge/access approval prerequisites are resolved; the
+  remaining end-to-end completion dependency is the user's new real pilot and its actual
+  reproduction, fix, regression tests, deployment and explicit acceptance.
+
+## Knowledge-graph backlog synchronization — 2026-10-27
+
+Canonical source reviewed: [hardening report at d04340d](https://github.com/florianliepe/meids-app/blob/d04340d/docs/uat/knowledge-graph-hardening-test-report-20261027.md).
+This is a repository-backlog reconciliation of the development team's evidence, not new
+Pandora test execution or tester acceptance. Report revision d04340d is distinct from the
+reported deployed backend revision 00cdb3145b2507d5f6148fb4456a7f357a206d28 (run 40509765893).
+No production issue statuses or data were changed during reconciliation.
+
+### Reported fixed/delivered
+
+| ID | Outcome | Evidence boundary |
+|---|---|---|
+| KG-001 | Durable graph nodes, edges, reviews and projection runs implemented | Migration 016 and live 19 nodes/37 active edges/1 projection run reported; zero live review decisions means persisted human-promotion round trips are not demonstrated by these counts. |
+| KG-002 | Revision changes invalidate accepted relations | Local revision-invalidation tests reported; do not label this a live approval test. |
+| KG-003 | Owner/admin/reviewer authorization enforced | Guard and promotion-boundary tests reported; comprehensive two-principal isolation remains KG-010. |
+| KG-004 | Default/unknown vector scope fallbacks removed | Reported code/test fix; full cross-service scope tests remain open. |
+| KG-005 | Evidence/provenance contract for semantic proposals implemented | Ontology-bounded candidate-only proposals and confidence cap; semantic quality evaluation remains KG-011. |
+| KG-006 | Embedding environment/provenance alignment corrected | Model/dimension provenance recorded; M1/M2 migration quality evaluation is not complete. |
+| KG-007 | Azure durable graph migration and persistence verified | Migration 016 and durable projection counts reported. |
+| KG-015 | Backend startup regression corrected | Listener starts before optional async migrations; production auto-migration returned to false; exact served backend revision reported. |
+
+### Open prioritized release-hardening backlog
+
+| Priority / severity | ID | Required next evidence | Related tests |
+|---|---|---|---|
+| P0 / Critical | KG-010 | Two-principal API, Search, Blob and graph-traversal isolation matrix, including direct IDs and revoked access. Existing RLS 19 allowed/0 wrong-tenant probe is narrow evidence only. | ISO-01, ISO-02 |
+| P1 / High | KG-009 | Disposable PostgreSQL/Blob/Search fault injection: atomic commit kill points, crash after acknowledgement, replay, lease expiry, poison events, concurrent workers and out-of-order revisions. | TX-01, OUT-01/02/03 |
+| P1 / High | KG-008 | Scheduled reconciliation and orphan reporting; controlled stale/missing projection repairs within a predefined SLA, then idempotent rerun. | REC-01 |
+| P1 / High | KG-013 | Isolated n8n duplicate/stale callbacks, cancellation, timeout/retry and approval-boundary assertions. | AGT-02 |
+| P1 / High | KG-012 | Central workflow-ID registry and deployed callable-vs-public-wrapper topology validation. Successful execution counts do not alone establish exact bindings/contracts. | AGT-01 |
+| P1 / High | KG-014 | Empty nonproduction Search rebuild with concurrent changes, cutover and rollback evidence. | REC-02 |
+| P1 / High | KG-011 | Versioned multilingual evaluation corpus, per-model thresholds, incompatible-dimension tests and controlled migration/rollback quality results. | SEM-02 |
+
+### Test result reconciliation and release gates
+
+- ISO-01: partial coverage of the original broad case, despite the source report's
+  "Passed live" label. Only the described runtime database tenant probe is demonstrated.
+- TX-01: transaction/static-contract evidence only; crash/kill-point acceptance remains open.
+- REL-01: durable projection demonstrated by reported counts; acceptance/rejection persistence
+  across restart and rebuild still needs explicit round-trip evidence before closing the full case.
+- REL-02 and REV-01: local/contract passes reported; preserve the execution scope in test records.
+- SEM-01: pure-vector, conversion and threshold regressions reported passed.
+- AGT-01: 7/7 successful workflow executions and contract suites reported; retain raw correlated
+  request/scope/tool/post-answer evidence for the specific release. This does not close KG-012/013.
+- DEP-01: exact backend SHA/run evidence reported. Full Pandora delivery acceptance still
+  requires relevant tests for that revision, every selected target and explicit tester acceptance.
+- Browser: no warnings/errors reported; this is supporting evidence, not functional coverage.
+- OUT-01/02/03, REC-01/02, SEM-02 and AGT-02 remain partial/pending as specified above.
+
+No isolation or approval-boundary failure may be waived. Other P1 waivers require a named
+owner, mitigation and review date. Semantic scores never approve, merge or expose knowledge.
+The recovery pilot remains proposed; this synchronization does not replace the user's new
+pilot or declare the overarching issue-to-delivery goal complete.
+
+## Owner-controlled issue events — design clarification pending
+
+The user requested live KG-008 through KG-014 issue/case records and an owner Start/Stop
+control that dispatches new or updated issues to the existing Intellectual Twin development
+chat, with results returned to Pandora. The seven issue records were created through the
+authenticated application on 2026-10-27; KG-010 is critical and the others are high priority.
+Historical evidence limitations remain explicit in their descriptions and actual results.
+No new passing test execution or delivery acceptance is implied by backlog creation.
+
+| Source item | Live Pandora issue ID | Linked acceptance cases |
+|---|---|---|
+| KG-010 | da380680-c1e3-414d-a4b9-0aa3fdf58912 | ISO-01, ISO-02 |
+| KG-009 | dbec6edb-89c7-4f73-bac6-d23edc19017b | TX-01, OUT-01, OUT-02, OUT-03 |
+| KG-008 | 83ef87ab-3a4a-4fc3-ab41-8f8115535917 | REC-01 |
+| KG-013 | 4172881f-ca69-499a-a215-ca51a5a002a7 | AGT-02 |
+| KG-012 | dd9513e8-aa28-4b63-88df-d0d049fcea5e | AGT-01 |
+| KG-014 | ed78a4fb-6dfb-4532-b774-ea35364ce54f | REC-02 |
+| KG-011 | fc07636a-fb87-46fd-8883-fe29212db162 | SEM-02 |
+
+Nine manual acceptance cases were verified in private repository state, with zero test runs.
+The UI session then expired while saving REC-02. That save was rejected with "Please sign in";
+REC-02 and SEM-02 must be added after renewed authentication, not counted as already saved.
+
+Update after renewed authentication: REC-02 and SEM-02 were saved successfully. Private
+state verification confirmed all seven KG issues, eleven manual acceptance cases, and zero
+test runs. The live priority-sorted backlog shows KG-010 first. Automatically generated
+additional cases remain drafts; none is represented as a passing execution.
+
+Before enabling dispatch, resolve the requested event filter, source merge/deploy approval
+policy, active-work cancellation behavior and execution host. Recommended event filtering
+excludes agent/status-only feedback to prevent recursive runs. Owner controls must be
+server-authorized, version-checked and audited; dispatch must default off. A stopped or
+superseded event cannot acquire new work or submit a stale result. Restart behavior must
+be explicit rather than silently replaying all historical issues.
+
+Reuse the existing project-scoped delivery claims, immutable evidence snapshots, correlated
+PR observations, pinned test reports, deployment checks and explicit acceptance gate.
+Event delivery needs durable deduplication, debounce, bounded retries, one active execution
+per issue, visible failure/needs-input states and a narrowly scoped bridge identity.
+Issue text and screenshots are evidence, never executable instructions or authorization.
+Stop cannot undo a completed merge or deployment; it must report any irreversible action
+already completed and whether cancellation was acknowledged.
+
+The official Codex App Server documents thread/resume, turn/start and turn/interrupt:
+https://developers.openai.com/codex/app-server . This does not establish that an external
+n8n workflow can call the desktop chat directly. The installed CLI exposes app-server proxy,
+but the local daemon version probe could not connect to the control socket on 2026-10-27.
+No daemon was started/restarted, no remote-control access was enabled, and no second process
+was permitted to write the desktop-owned chat. Verify a supported single-writer connection
+before enabling the bridge; do not substitute a scheduled poll and describe it as push delivery.
+
+The development chat confirmed preparation order KG-010, KG-009, KG-008, KG-013,
+KG-012, KG-014, KG-011. Full KG-010 execution requires two dedicated Entra identities
+in different authorized scopes, separate twins/records/Blob paths/Search filters/graph
+projections, synthetic markers, read-only observability, cleanup and explicit stop criteria.
+Local synthetic tests cannot close the real-service isolation gap. The development chat
+also confirmed that direct event ingress into its existing desktop conversation is unverified.
+
+### Confirmed execution policy and implementation checkpoint
+
+The human confirmed creation and description/steps/screenshot events only, ignoring
+agent/status-only feedback; automatic source merge/deploy after required tests pass;
+Stop blocks new work and requests active cancellation; execution uses a separate unattended
+runner. Existing desktop chat coordination continues, but a hosted runner has a separate
+Codex session. No desktop HTTP endpoint or shared-session writer is assumed.
+
+Local implementation now includes owner-only versioned controls, default-off readiness,
+durable debounced events, no historical replay on Start, event-scoped handoff claims,
+supersession/Stop lease revocation, cancellation-request visibility, a post-commit API wake
+hook and a generated n8n dispatcher with a recovery schedule. Unit/API checks and the
+browser Start/Stop fixture pass. These files have NOT been deployed or enabled.
+
+Provisioning remains incomplete: the private `Pandora-data` receiver workflow
+`pandora-issue-runner.yml`, authenticated hosted Codex execution, callback wiring, verified
+runner readiness collection, source publication/merge gating and live cancellation/delivery
+verification still need completion. Do not mark a runner ready or enable Start merely because
+the local fixtures passed. OpenAI Platform requires user sign-in; no API key was available
+or created. Never copy desktop authentication into a GitHub-hosted runner.
+
+Coordinated source prerequisites: meids-app PR #24 and meids-agent-configs PR #3 add
+non-deploying PR validation. Initial CI passed; unique check-run names were requested to
+avoid ambiguity in branch protection. meids-app main has no current protection. GitHub's
+current plan rejects protection for the private agent-configs repository. Keep unattended
+merge disabled there; do not make it public or purchase an upgrade implicitly.

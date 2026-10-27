@@ -1,3 +1,4 @@
+import {issueAutomationWorker} from './issue-automation-worker.mjs';
 import {deploymentWorker} from './deployment-worker.mjs';
 import {deliveryWorker} from './delivery-worker.mjs';
 import {pipelineWorker} from './pipelines.mjs';
@@ -27,6 +28,7 @@ export function iterationSuggestion(s,issue,today=now().slice(0,10)){
 const generatedCase=z.object({title:z.string().trim().min(2).max(180),steps:z.string().max(8000),expected:z.string().max(8000),preconditions:z.string().max(4000).default(''),kind:z.enum(['functional','regression','integration','smoke','acceptance']).default('regression')}).strict();
 export const generationSchema=z.object({cases:z.array(generatedCase).min(1).max(6),notes:z.string().max(2000).default('')}).strict();
 export function workerRequest(s,request){
+ if(request.path.startsWith('/automation/issues/'))return issueAutomationWorker(s,request);
  if(request.path.startsWith('/automation/deployments/'))return deploymentWorker(s,request);
  if(request.path.startsWith('/automation/delivery/'))return deliveryWorker(s,request);
  if(request.path.startsWith('/automation/pipelines/'))return pipelineWorker(s,request);
