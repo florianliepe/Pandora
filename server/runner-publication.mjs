@@ -12,7 +12,7 @@ const digest=x=>createHash('sha256').update(JSON.stringify(x)).digest('hex');
 export function runnerContext(s,b,{renew=false}={}){
  const e=s.issueAutomationEvents?.find(e=>e.id===b.eventId&&e.projectId===b.projectId);
  const j=s.deliveries?.find(j=>j.id===b.jobId&&j.projectId===b.projectId);
- if(!e||!j||e.jobId!==j.id||j.automationEventId!==e.id||e.runId!==b.runId||e.state!=='running'||!eventIsCurrent(s,e)||j.repository!=='florianliepe/meids-app')fail(409,'Runner event is no longer authorized');
+ if(!e||!j||j.state!=='running'||e.jobId!==j.id||j.automationEventId!==e.id||e.runId!==b.runId||e.state!=='running'||!eventIsCurrent(s,e)||j.repository!=='florianliepe/meids-app')fail(409,'Runner event is no longer authorized');
  if(renew){const cap=Object.fromEntries(['projectId','workerId','jobId','claimId','token'].map(k=>[k,b[k]]));deliveryWorker(s,{path:'/automation/delivery/renew',method:'POST',body:cap});}
  return {e,j};
 }

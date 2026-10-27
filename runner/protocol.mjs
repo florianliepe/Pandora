@@ -5,7 +5,7 @@ export const BRIDGE_SCHEMA_VERSION=1;
 export const APPROVED_BRIDGE_ORIGIN='https://eraneos-agentic-platform.azurewebsites.net';
 export const APPROVED_BRIDGE_PATH='/webhook/pandora-issue-runner-v1';
 
-const operations=new Set(['preflight','start','status','cancelled','renew','evidence','report','finish','publish','merge-readiness','merged']);
+const operations=new Set(['preflight','start','status','cancelled','renew','evidence','report','finish','publish','merge','verification-start']);
 const uuidPattern=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const shaPattern=/^[a-f0-9]{40}$/;
 const capabilityPattern=/^[a-f0-9]{64}$/;

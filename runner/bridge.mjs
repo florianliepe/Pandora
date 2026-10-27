@@ -3,7 +3,7 @@ import {dirname,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {decryptCapability,encryptCapability} from './capability-crypto.mjs';
 import {decodePinnedGitBlob} from './git-blob.mjs';
-import {approvedBridgeUrl,assertEventId,assertRunId,mergeAttestation,parseStartResponse,publicationProposal,requestEnvelope} from './protocol.mjs';
+import {approvedBridgeUrl,assertEventId,assertRunId,parseStartResponse,publicationProposal,requestEnvelope} from './protocol.mjs';
 
 const here=dirname(fileURLToPath(import.meta.url));
 const privateRoot=resolve(here,'../.runner/private');
@@ -16,7 +16,7 @@ const contention=value=>(value?.body?.code||value?.code)==='storage_lease_conten
 async function call(operation,eventId,runId,body={}){
  const {url,token}=config(),payload=JSON.stringify(requestEnvelope(operation,eventId,runId,body));
  for(let attempt=1;attempt<=3;attempt++){
-  const response=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json','X-Pandora-Worker':token},body:payload,signal:AbortSignal.timeout(30000)});
+  const response=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json','X-Pandora-Worker':token},body:payload,signal:AbortSignal.timeout(['merge','publish'].includes(operation)?180000:30000)});
   const value=await response.json().catch(()=>null),status=Number(value?.status||response.status);
   if(response.ok&&status>=200&&status<300)return value?.body??value;
   if(status===409&&contention(value)&&attempt<3){await new Promise(resolvePromise=>setTimeout(resolvePromise,attempt*250));continue;}
@@ -34,12 +34,14 @@ async function output(name,value){if(process.env.GITHUB_OUTPUT)await writeFile(p
 
 async function start(){const eventId=assertEventId(option('--event-id')),runId=assertRunId(option('--run-id')),claimed=parseStartResponse(await call('start',eventId,runId));await secureWrite(handoffPath(eventId),JSON.stringify({schemaVersion:1,eventId,runId,job:claimed.job,expires:claimed.expires}));await secureWrite(capabilityPath(eventId),JSON.stringify(encryptCapability(claimed.capability,config().token)));await output('repository',claimed.job.repository);await output('base_sha',claimed.job.baseSha);await output('base_branch',claimed.job.baseBranch);await output('job_id',claimed.job.id);}
 
-async function callback(operationName,transform=x=>x){const eventId=assertEventId(option('--event-id')),state=await context(eventId);let body={...state.capability};if(args.includes('--file'))body={...body,...transform(JSON.parse(await readFile(option('--file'),'utf8')))};if(args.includes('--outcome'))body={...body,outcome:option('--outcome'),summary:(await readFile(option('--summary-file'),'utf8')).trim()};await call(operationName,eventId,state.runId,body);}
+async function callback(operationName,transform=x=>x){const eventId=assertEventId(option('--event-id')),state=await context(eventId);let body={...state.capability};if(args.includes('--file'))body={...body,...transform(JSON.parse(await readFile(option('--file'),'utf8')))};if(args.includes('--outcome'))body={...body,outcome:option('--outcome'),summary:(await readFile(option('--summary-file'),'utf8')).trim()};const result=await call(operationName,eventId,state.runId,body);if(operationName==='publish'){if(result.accepted!==true||!/^[a-f0-9]{40}$/.test(result.headSha))throw Error('Publication confirmation missing');const plain=await handoff(eventId);plain.job.pullObservation={headSha:result.headSha};plain.publication=result;await secureWrite(handoffPath(eventId),JSON.stringify(plain));}}
 async function status(){const eventId=assertEventId(option('--event-id')),state=await handoff(eventId),value=await call('status',eventId,state.runId,{});if(value.continue!==true)throw Error('Pandora event is no longer current');}
 async function cancelled(){const eventId=assertEventId(option('--event-id')),runId=assertRunId(option('--run-id'));await call('cancelled',eventId,runId,{});}
 async function preflight(){const eventId=assertEventId(option('--event-id')),runId=assertRunId(option('--run-id')),body=JSON.parse(await readFile(option('--file'),'utf8'));await call('preflight',eventId,runId,body);}
 async function evidence(){const eventId=assertEventId(option('--event-id')),state=await context(eventId),input=JSON.parse(await readFile(option('--file'),'utf8')),value=await call('evidence',eventId,state.runId,{...state.capability,attachmentId:input.attachmentId}),bytes=decodePinnedGitBlob(value?.file);await secureWrite(resolve(option('--output')),bytes);}
+async function merge(){const eventId=assertEventId(option('--event-id')),state=await context(eventId),result=await call('merge',eventId,state.runId,state.capability);if(result.accepted!==true||!/^[a-f0-9]{40}$/.test(result.mergeSha))throw Error('Merge confirmation missing');const plain=await handoff(eventId);plain.merge=result;await secureWrite(handoffPath(eventId),JSON.stringify(plain));}
+async function verificationStart(){const eventId=assertEventId(option('--event-id')),state=await context(eventId),claimed=parseStartResponse(await call('verification-start',eventId,state.runId,state.capability));await secureWrite(handoffPath(eventId),JSON.stringify({schemaVersion:1,eventId,runId:state.runId,job:claimed.job,expires:claimed.expires}));await secureWrite(capabilityPath(eventId),JSON.stringify(encryptCapability(claimed.capability,config().token)));}
 
-const commands={preflight,start,status,cancelled,renew:()=>callback('renew'),evidence,report:()=>callback('report',report=>({report})),finish:()=>callback('finish'),publish:()=>callback('publish',value=>publicationProposal(value)),'merge-readiness':()=>callback('merge-readiness',value=>mergeAttestation(value)),merged:()=>callback('merged',value=>value)};
+const commands={preflight,start,status,cancelled,renew:()=>callback('renew'),evidence,report:()=>callback('report',report=>({report})),finish:()=>callback('finish'),publish:()=>callback('publish',value=>publicationProposal(value)),merge,'verification-start':verificationStart};
 if(!commands[command])throw Error('Unknown bridge command');
 await commands[command]();

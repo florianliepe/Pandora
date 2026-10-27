@@ -4,6 +4,7 @@ import {automationView,eventIsCurrent,cancelEvent} from './issue-automation.mjs'
 import {prepareDelivery} from './delivery.mjs';
 import {queueDelivery,deliveryWorker} from './delivery-worker.mjs';
 import {runnerPublication} from './runner-publication.mjs';
+import {runnerMerge} from './runner-merge.mjs';
 const identity=z.object({projectId:z.string().uuid()}).strict();
 const ref=identity.extend({eventId:z.string().uuid()}).strict();
 function event(s,b){const e=s.issueAutomationEvents?.find(e=>e.id===b.eventId&&e.projectId===b.projectId);if(!e)fail(404,'Issue event not found');return e;}
@@ -11,6 +12,7 @@ export function issueAutomationWorker(s,r){
  if(r.method!=='POST')fail(405,'Internal worker requires POST');
  const action=r.path.split('/').at(-1),raw=r.body||{};
  if(['publish-prepare','publish-complete'].includes(action))return runnerPublication(s,action,raw);
+ if(['merge-prepare','merge-authorize','merge-consume','merge-complete','verification-start'].includes(action))return runnerMerge(s,action,raw);
  if(action==='preflight'){
   const b=identity.extend({schemaVersion:z.literal(1),syntheticEventId:z.literal('00000000-0000-4000-8000-000000000001'),runId:z.number().int().positive(),mode:z.enum(['callback','provider','cancellation','evidence']),phase:z.enum(['started','completed','cancelled']),nonce:z.string().uuid(),receiverWorkflowPath:z.literal('runner/issue-runner-receiver.workflow.json')}).strict().parse(raw);
   const rows=s.automationPreflights??=[],old=rows.find(x=>x.projectId===b.projectId&&x.runId===b.runId);
