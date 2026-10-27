@@ -64,6 +64,13 @@ test('email login, project, issue, search, test case and execution',async({page}
   await page.getByRole('button',{name:'<script>literal issue title</script>',exact:true}).click();
   await page.getByRole('button',{name:'Prepare fix handoff',exact:true}).click();
   await expect(page.getByRole('button',{name:'Download private handoff',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Choose deployment targets',exact:true}).click();
+  await page.getByLabel('Production frontend',{exact:true}).check();
+  await page.getByLabel('Production backend',{exact:true}).check();
+  await page.getByRole('button',{name:'Save targets',exact:true}).click();
+  await page.getByRole('button',{name:'<script>literal issue title</script>',exact:true}).click();
+  await expect(page.getByText('production frontend: awaiting revision evidence',{exact:true})).toBeVisible();
+  await expect(page.getByText('production backend: awaiting revision evidence',{exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Link fix PR',exact:true}).click();
   await page.getByLabel('Pull request number').fill('42');
   await page.getByRole('button',{name:'Request link verification',exact:true}).click();

@@ -1,3 +1,4 @@
+import {selectDeploymentTargets} from './deployment-worker.mjs';
 import {queueDelivery} from './delivery-worker.mjs';
 import {prepareDelivery,deliveryContext,cancelDelivery,publicJob,requestPullLink} from './delivery.mjs';
 import {queueTests,evidenceFields,derivedTestStatus,syncTestStatuses,cadenceSchema,ensureIterations,iterationSuggestion} from './quality.mjs';
@@ -66,6 +67,7 @@ const mailReady=!!deliverMail;
   app.delete('/api/projects/:projectId/members/:userId',async(req,res)=>{await store.change(s=>{const p=req.params.projectId;permit(s,p,req.user.id,['owner']);const m=s.members.find(m=>m.projectId===p&&m.userId===req.params.userId);if(!m)fail(404,'Member not found');if(m.role==='owner'&&s.members.filter(m=>m.projectId===p&&m.role==='owner').length===1)fail(400,'Keep at least one owner');s.members=s.members.filter(x=>x!==m);audit(s,p,req.user.id,'member.removed',m.userId);});res.json({ok:true});});
   app.post('/api/projects/:projectId/issues/:id/deliveries',async(req,res)=>{const result=await store.change(s=>prepareDelivery(s,req.params.projectId,req.params.id,req.user.id,req.body));res.status(201).json(result);});
   app.post('/api/projects/:projectId/deliveries/:id/queue',async(req,res)=>{const {version}=z.object({version:z.number().int().positive()}).strict().parse(req.body);res.json(await store.change(s=>queueDelivery(s,req.params.projectId,req.params.id,req.user.id,version)));});
+  app.put('/api/projects/:projectId/deliveries/:id/targets',async(req,res)=>res.json(await store.change(s=>selectDeploymentTargets(s,req.params.projectId,req.params.id,req.user.id,req.body))));
   app.put('/api/projects/:projectId/deliveries/:id/pull',async(req,res)=>res.json(await store.change(s=>requestPullLink(s,req.params.projectId,req.params.id,req.user.id,req.body))));
   app.get('/api/projects/:projectId/deliveries/:id/context',async(req,res)=>{const s=await store.read();res.json(deliveryContext(s,req.params.projectId,req.params.id,req.user.id));});
   app.post('/api/projects/:projectId/deliveries/:id/cancel',async(req,res)=>{const {version}=z.object({version:z.number().int().positive()}).strict().parse(req.body);res.json(await store.change(s=>cancelDelivery(s,req.params.projectId,req.params.id,req.user.id,version)));});

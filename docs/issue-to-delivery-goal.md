@@ -120,3 +120,13 @@ existing revisions and observations; they are not a new fix produced by this goa
   passed. This validator is not wired into a live collector yet and does not claim functional
   verification. Next: explicit per-handoff target selection, authenticated collector storage,
   verification-worker lifecycle and tester acceptance/reopen gates, then the new real pilot.
+- 2026-10-27 deployment collector increment: added owner/developer target selection to the
+  issue workspace and shared API, with optimistic version checks and audit history. The
+  internal collector lists bounded fixed targets and rejects in-flight observations after
+  evidence/configuration/PR/target changes. Failed checks replace earlier target success.
+  Added a scheduled n8n workflow separating unauthenticated application probes from GitHub
+  credentials, disabling redirects and execution payload retention. Successful revision
+  observations still do not accept issues or create functional test results. Local browser
+  target-selection acceptance, collector tests and runtime/frontend builds passed. Workflow
+  files are generated but this collector increment is not deployed yet. Next: integrate the
+  post-deployment worker lifecycle and explicit tester acceptance/reopening before publishing.
