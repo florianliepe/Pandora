@@ -1,3 +1,4 @@
+import {pipelineWorker} from './pipelines.mjs';
 import {z} from 'zod/v3';
 import {id,now,audit,fail} from './domain.mjs';
 export const cadenceSchema=z.object({enabled:z.boolean(),startDate:z.string().date(),lengthDays:z.number().int().min(7).max(42),lookahead:z.number().int().min(1).max(6)}).strict();
@@ -24,6 +25,7 @@ export function iterationSuggestion(s,issue,today=now().slice(0,10)){
 const generatedCase=z.object({title:z.string().trim().min(2).max(180),steps:z.string().max(8000),expected:z.string().max(8000),preconditions:z.string().max(4000).default(''),kind:z.enum(['functional','regression','integration','smoke','acceptance']).default('regression')}).strict();
 export const generationSchema=z.object({cases:z.array(generatedCase).min(1).max(6),notes:z.string().max(2000).default('')}).strict();
 export function workerRequest(s,request){
+ if(request.path.startsWith('/automation/pipelines/'))return pipelineWorker(s,request);
  if(request.method!=='POST')fail(405,'Internal worker requires POST');
  if(request.path==='/automation/claim'){
   for(const p of s.projects)ensureIterations(s,p);

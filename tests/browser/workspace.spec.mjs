@@ -50,6 +50,12 @@ test('email login, project, issue, search, test case and execution',async({page}
   await expect(page.getByRole('button',{name:'Accept assignment'})).toHaveCount(0);
   await page.getByRole('button',{name:'Project settings',exact:true}).click();
   await expect(page.getByLabel('Agentic merge — phase two')).toBeDisabled();
+  await page.getByRole('button',{name:'Repositories & CI',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Repository evidence, in context.'})).toBeVisible();
+  await page.getByRole('button',{name:'Connect Intellectual Twin repositories',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Disconnect polling',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Disconnect polling',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Connect Intellectual Twin repositories',exact:true})).toBeVisible();
   await page.setViewportSize({width:390,height:844});
   await page.getByRole('button',{name:'Overview',exact:true}).click();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);

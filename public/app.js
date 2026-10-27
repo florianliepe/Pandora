@@ -7,9 +7,9 @@ const short=id=>id?.slice(0,6).toUpperCase()||'—';
 const apiBase=(window.PANDORA_CONFIG?.apiBase||'').replace(/\/$/,'');
 const n8nMode=window.PANDORA_CONFIG?.apiMode==='n8n';
 let token=sessionStorage.getItem('pandora-session'),me,projects=[],data,projectId='',view='dashboard',filter={q:'',priority:'',status:'',type:'',owner:'',iteration:'',sort:'newest'},challengeId='',mailEmail='',toastTimer,modalRecord,chatMessages=[];
-const paths=['dashboard','backlog','tests','iterations','insights','activity','settings'];
-const icons=['◫','☷','✓','▤','↗','◷','⚙'];
-const titles=['Overview','Issue backlog','Test management','Iterations','Flow & DORA','Activity','Project settings'];
+const paths=['dashboard','backlog','tests','iterations','insights','pipelines','activity','settings'];
+const icons=['◫','☷','✓','▤','↗','⇄','◷','⚙'];
+const titles=['Overview','Issue backlog','Test management','Iterations','Flow & DORA','Repositories & CI','Activity','Project settings'];
 const isEditor=()=>['owner','developer'].includes(data?.role);
 const isContributor=()=>['owner','developer','tester'].includes(data?.role);
 const ownerName=id=>data?.members.find(m=>m.userId===id)?.user?.name||'Unassigned';
@@ -46,6 +46,7 @@ function renderPage(){
   if(view==='tests')return tests();
   if(view==='iterations')return iterations();
   if(view==='insights')return insights();
+  if(view==='pipelines')return pipelines();
   if(view==='activity')return activity();
   return settings();
 }
@@ -103,6 +104,8 @@ document.addEventListener('click',async e=>{
     const action=b.dataset.action;if(!action)return;
     if(['edit','run-case','refresh-issue','remove-evidence'].includes(action)&&$('#modal').open&&modalRecord?.kind==='issues'&&(modalRecord.dirty||modalRecord.pendingFiles?.length)){toast('Save your issue changes and pending screenshots first.');return;}
     if(action==='close-modal'){$('#modal').close();return;}
+    if(action==='pipeline-toggle'){await api(base()+'/pipelines',{method:'PUT',body:{enabled:!data.project.pipelineConnection?.enabled,revision:data.project.pipelineConnection?.revision||0}});await refresh();return;}
+    if(action==='refresh-pipelines'){await refresh();return;}
     if(action==='reset-login'){challengeId='';renderLogin();return;}
     if(action==='logout'){await api('/auth/logout',{method:'POST'});token=null;me=null;sessionStorage.removeItem('pandora-session');renderLogin();return;}
     if(action==='new-project'){projectForm();return;}
@@ -177,3 +180,9 @@ $('#modal').addEventListener('close',()=>{for(const u of pendingPreviewUrls)URL.
 function aggregateTestView(){return heading('Test coverage across your projects.','Only projects you belong to are included. Open a project to review or edit its tests.','<button class="btn" data-action="project-tests">Current project</button>')+`<section class="panel"><div class="table-wrap"><table><thead><tr><th>Project</th><th>Issue</th><th>Test case</th><th>Issue verification</th><th></th></tr></thead><tbody>${aggregateTests.cases.map(c=>`<tr><td>${esc(aggregateTests.projects.find(p=>p.id===c.projectId)?.name)}</td><td>${esc(c.issueTitle||'Unlinked')}</td><td>${esc(c.title)} ${c.source==='ai'&&!c.manualEdited?badge('draft'):''}</td><td>${badge(c.issueTestStatus)}</td><td><button class="btn small" data-action="project-tests" data-project="${c.projectId}">Open project</button></td></tr>`).join('')}</tbody></table></div>${aggregateTests.cases.length?'':empty('No test cases yet')}</section>`;}
 
 document.addEventListener('input',e=>{if(e.target.closest('#entity-form')&&modalRecord?.kind==='issues')modalRecord.dirty=true;});
+function pipelines(){
+ const c=data.project.pipelineConnection,e=data.project.pipelineEvidence;
+ const link=(url,label)=>`<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(label)}</a>`;
+ const time=v=>v?new Date(v).toLocaleString():'Not recorded';
+ return heading('Repository evidence, in context.','Read-only GitHub pipeline observations. Functional verification remains a separate step.',`<button class="btn" data-action="refresh-pipelines">Refresh view</button>`)+`<section class="panel"><div class="panel-title"><h2>Intellectual Twin connection</h2>${badge(c?.enabled?'enabled':'disabled')}</div><p>florianliepe/meids-app · main · production frontend, production backend and Pages sandbox.<br>florianliepe/meids-agent-configs · main · configuration source only; no CI configured.</p>${data.role==='owner'?`<button class="btn" data-action="pipeline-toggle">${c?.enabled?'Disconnect polling':'Connect Intellectual Twin repositories'}</button>`:''}<p><small>Polls every five minutes while enabled. Displays up to three recent runs per workflow. Last observation: ${esc(time(e?.observedAt))}.</small></p>${e&&Date.now()-Date.parse(e.observedAt)>900000?'<div class="notice">Observations are older than 15 minutes. Treat this view as stale until polling succeeds.</div>':''}${!c?.enabled&&e?'<div class="notice">Polling is disabled. The last collected evidence is retained.</div>':''}<div class="notice">Workflow success is not proof that every functional test passed. Advisory steps may allow a workflow to succeed. CI observations do not close issues or populate DORA deployment metrics.</div>${(e?.errors||[]).map(x=>`<p role="status">${esc(x)}</p>`).join('')}</section><br>${!e?empty('Awaiting the first observation','Connect the repositories and return after the next five-minute poll.'): `<section class="panel"><h2>Source revisions</h2>${e.sources.map(s=>`<p>${esc(s.repository)} · ${esc(s.role)}<br>${s.commit?link('https://github.com/'+s.repository+'/commit/'+s.commit,s.commit.slice(0,12)):'Source unavailable'}</p>`).join('')}</section><br><section class="panel"><h2>Workflow runs and validation steps</h2>${e.runs.length?e.runs.map(r=>`<details class="pipeline-run"><summary>${esc(r.name)} · ${esc(r.environment)} · ${esc(r.commit.slice(0,8))} · ${esc(r.status==='completed'?r.conclusion:r.status)}${r.stale?' · stale':''}</summary><p>${link(r.url,'Open run '+r.id)} · attempt ${r.attempt} · ${esc(r.event)} · ${esc(time(r.updatedAt))}</p>${r.jobs.length?r.jobs.map(j=>`<h3>${esc(j.name)} ${badge(j.status==='completed'?j.conclusion:j.status)}</h3><div class="table-wrap"><table><thead><tr><th>Step</th><th>Result</th></tr></thead><tbody>${j.steps.map(s=>`<tr><td>${esc(s.name)}</td><td>${badge(s.status==='completed'?s.conclusion:s.status)}</td></tr>`).join('')}</tbody></table></div>`).join(''):'<p>Job details unavailable or not yet started.</p>'}${r.jobsTruncated?'<p>Additional jobs are available on GitHub.</p>':''}</details>`).join(''):empty('No matching workflow runs')}</section><br><section class="panel"><h2>Historical UAT evidence</h2><div class="notice">These are versioned repository records, not tests executed by this poll. The source commit identifies the file version; it does not prove the tested application revision. Failures may predate subsequent fixes.</div>${e.uat?`<p>${link(e.uat.url,'View original UAT evidence')} · source ${esc(e.uat.sourceCommit.slice(0,12))}${e.uat.stale?' · stale':''}<br>Reported execution timestamp: ${esc(e.uat.reportedAt||'Not recorded')} · ${e.uat.totalCases} recorded cases</p><div class="table-wrap"><table><thead><tr><th>Case</th><th>Recorded status</th><th>Findings</th></tr></thead><tbody>${e.uat.cases.map(c=>`<tr><td>${esc(c.id)}</td><td>${badge(c.status)}</td><td>${esc(c.findings)}</td></tr>`).join('')}</tbody></table></div>${e.uat.totalCases>e.uat.cases.length?'<p>Showing the first 40 cases. Open the original for all evidence.</p>':''}`:empty('No supported UAT evidence available')}</section>`}`;
+}
