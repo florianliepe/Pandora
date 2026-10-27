@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "issueId": "da380680-c1e3-414d-a4b9-0aa3fdf58912",
+  "cases": [
+    { "code": "ISO-01", "caseId": "4935383c-519d-4940-a8d0-c758d1832c3e", "version": 1 },
+    { "code": "ISO-02", "caseId": "dae0d6e0-b7a2-4776-a13e-005bc7da1ed9", "version": 1 }
+  ],
+  "environment": {
+    "classification": "nonproduction",
+    "backendOrigin": "https://REQUIRED-NONPRODUCTION-BACKEND.azurewebsites.net/",
+    "resourceGroup": "REQUIRED-NONPRODUCTION-RESOURCE-GROUP",
+    "postgresServer": "REQUIRED-NONPRODUCTION-POSTGRES",
+    "database": "REQUIRED-NONPRODUCTION-DATABASE",
+    "blobAccount": "REQUIREDNONPRODUCTIONBLOB",
+    "blobContainer": "REQUIRED-NONPRODUCTION-CONTAINER",
+    "searchEndpoint": "https://REQUIRED-NONPRODUCTION-SEARCH.search.windows.net/",
+    "approvedIndex": "REQUIRED-NONPRODUCTION-APPROVED-INDEX",
+    "workingIndex": "REQUIRED-NONPRODUCTION-WORKING-INDEX",
+    "graphApiPath": "/api/okf/graph"
+  },
+  "principals": [
+    {
+      "label": "principal_a",
+      "tenantId": "REQUIRED-TENANT-UUID",
+      "objectId": "REQUIRED-PRINCIPAL-A-OBJECT-UUID",
+      "credentialSecretName": "PANDORA-KG010-PRINCIPAL-A-TOKEN",
+      "expectedOrganizationId": "REQUIRED-ORGANIZATION",
+      "expectedUserId": "REQUIRED-USER-A",
+      "expectedTwinId": "REQUIRED-TWIN-A"
+    },
+    {
+      "label": "principal_b",
+      "tenantId": "REQUIRED-TENANT-UUID",
+      "objectId": "REQUIRED-PRINCIPAL-B-OBJECT-UUID",
+      "credentialSecretName": "PANDORA-KG010-PRINCIPAL-B-TOKEN",
+      "expectedOrganizationId": "REQUIRED-ORGANIZATION",
+      "expectedUserId": "REQUIRED-USER-B",
+      "expectedTwinId": "REQUIRED-TWIN-B"
+    }
+  ],
+  "safety": {
+    "productionDataPresent": false,
+    "syntheticWritesOnly": true,
+    "cleanupRequired": true,
+    "readOnlyObservability": true,
+    "maxRuntimeMinutes": 30,
+    "expiresAt": "REQUIRED-ISO-TIMESTAMP-WITHIN-SEVEN-DAYS"
+  }
+}

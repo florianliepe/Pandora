@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, isAbsolute, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
@@ -36,12 +36,14 @@ export async function targetRoot() {
 }
 
 export async function runFixedCommand(name, { args = [], env = {}, timeout = 120000 } = {}) {
-  const relative = commands[name];
-  if (!relative) throw new Error(`Unknown fixed evidence command: ${name}`);
+  const commandPath = commands[name];
+  if (!commandPath) throw new Error(`Unknown fixed evidence command: ${name}`);
   const root = await targetRoot();
-  const script = resolve(root, relative);
-  const expectedPrefix = `${root}${process.platform === "win32" ? "\\" : "/"}`;
-  if (!script.startsWith(expectedPrefix)) throw new Error("Fixed evidence command escaped the target checkout");
+  const script = await realpath(resolve(root, commandPath));
+  const resolvedRelative = relative(root, script);
+  if (!resolvedRelative || resolvedRelative.startsWith("..") || isAbsolute(resolvedRelative)) {
+    throw new Error("Fixed evidence command escaped the target checkout");
+  }
   try {
     return await execFileAsync(process.execPath, [script, ...args], {
       cwd: root,
