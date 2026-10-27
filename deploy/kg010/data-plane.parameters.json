@@ -1,0 +1,85 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "value": "westeurope"
+    },
+    "backendName": {
+      "value": "meids-kg010-backend-1853a19b"
+    },
+    "postgresServerName": {
+      "value": "psql-meids-kg010-1853a19b"
+    },
+    "entraAdminObjectId": {
+      "value": "a85b18b9-428a-4169-91e9-c7b1cc0d159e"
+    },
+    "entraAdminPrincipalName": {
+      "value": "Me.IDs Production PostgreSQL Administrators"
+    },
+    "entraAdminPrincipalType": {
+      "value": "Group"
+    },
+    "vnetName": {
+      "value": "vnet-meids-kg010-weu"
+    },
+    "vnetAddressPrefix": {
+      "value": "10.43.0.0/16"
+    },
+    "appSubnetAddressPrefix": {
+      "value": "10.43.1.0/24"
+    },
+    "databaseSubnetAddressPrefix": {
+      "value": "10.43.2.0/24"
+    },
+    "privateEndpointSubnetAddressPrefix": {
+      "value": "10.43.3.0/24"
+    },
+    "privateDnsZoneName": {
+      "value": "kg010.private.postgres.database.azure.com"
+    },
+    "searchServiceName": {
+      "value": "srch-meids-kg010-1853a19b"
+    },
+    "storageAccountName": {
+      "value": "stmeidskg0101853a19b"
+    },
+    "databaseName": {
+      "value": "meids_kg010"
+    },
+    "postgresSkuName": {
+      "value": "Standard_B1ms"
+    },
+    "postgresStorageSizeGb": {
+      "value": 32
+    },
+    "backupRetentionDays": {
+      "value": 7
+    },
+    "enableGeoRedundantBackup": {
+      "value": false
+    },
+    "enableSameZoneHa": {
+      "value": false
+    },
+    "enableZoneRedundantHa": {
+      "value": false
+    },
+    "logAnalyticsName": {
+      "value": "log-meids-kg010-weu"
+    },
+    "deployBackendAlerts": {
+      "value": false
+    },
+    "tags": {
+      "value": {
+        "application": "meids",
+        "environment": "kg010-nonproduction",
+        "workload": "pandora-isolation-probe",
+        "data-classification": "synthetic-only",
+        "managed-by": "bicep",
+        "delete-after": "operator-sets-at-deployment"
+      }
+    }
+  }
+}

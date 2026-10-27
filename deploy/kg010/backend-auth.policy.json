@@ -1,0 +1,28 @@
+{
+  "properties": {
+    "platform": {
+      "enabled": true,
+      "runtimeVersion": "~1"
+    },
+    "globalValidation": {
+      "requireAuthentication": true,
+      "unauthenticatedClientAction": "Return401",
+      "redirectToProvider": "azureactivedirectory"
+    },
+    "identityProviders": {
+      "azureActiveDirectory": {
+        "enabled": true,
+        "registration": {
+          "openIdIssuer": "https://login.microsoftonline.com/213a6ca3-4808-4047-8aca-814d2cde4474/v2.0",
+          "clientIdSettingName": "KG010_ENTRA_CLIENT_ID",
+          "clientSecretSettingName": "KG010_ENTRA_CLIENT_SECRET"
+        },
+        "validation": {
+          "allowedAudiences": [
+            "api://meids-kg010"
+          ]
+        }
+      }
+    }
+  }
+}

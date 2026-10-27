@@ -1,0 +1,23 @@
+{
+  "DATABASE_HOST": "psql-meids-kg010-1853a19b.postgres.database.azure.com",
+  "DATABASE_PORT": "5432",
+  "DATABASE_NAME": "meids_kg010",
+  "DATABASE_USER": "meids-kg010-backend-1853a19b",
+  "DATABASE_SSL": "true",
+  "POSTGRES_AUTH_MODE": "managed_identity",
+  "MEIDS_STORAGE_MODE": "postgres",
+  "MEIDS_DATABASE_SCHEMA_MANAGED": "true",
+  "MEIDS_AUTHZ_DATABASE_ENABLED": "true",
+  "MEIDS_ENFORCE_KNOWLEDGE_AUTH": "true",
+  "MEIDS_STORAGE_ACCOUNT_NAME": "stmeidskg0101853a19b",
+  "MEIDS_OUTBOX_PROJECTOR_ENABLED": "true",
+  "MEIDS_OUTBOX_BATCH_SIZE": "10",
+  "MEIDS_OUTBOX_INTERVAL_MS": "5000",
+  "AZURE_SEARCH_AUTH_MODE": "managed_identity",
+  "AZURE_SEARCH_ENDPOINT": "https://srch-meids-kg010-1853a19b.search.windows.net",
+  "AZURE_SEARCH_APPROVED_INDEX": "meids-kg010-approved-v1",
+  "AZURE_SEARCH_WORKING_INDEX": "meids-kg010-working-v1",
+  "AZURE_SEARCH_API_VERSION": "2025-09-01",
+  "AZURE_SEARCH_REQUEST_TIMEOUT_MS": "10000",
+  "AZURE_SEARCH_STARTUP_PROBE": "true"
+}
