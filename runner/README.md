@@ -96,22 +96,24 @@ creates or independently re-fetches exactly one PR and verifies repository/base/
 the opaque marker before calling internal-only `publish-complete`. The runner never receives
 a source-write token. Until both store operations exist, the callback fails closed.
 
-### `POST /automation/issues/merge-readiness`
+### External receiver operation `merge`
 
-Input: event/run identity, active capability, exact PR/head/base, fresh branch-protection
-snapshot and successful required-check observations. Re-fetch GitHub state with the trusted
-n8n credential. Require complete Pandora reproduction and candidate reports, current PR
-correlation, non-draft/mergeable PR, exact head SHA, enabled protection and every required
-check successful at that SHA. Return a short-lived, single-use merge authorization bound to
-event, job, PR and head SHA. Never accept the model response as evidence.
+Input contains only the active capability and event/run identity. The runner cannot supply
+GitHub checks, protection settings, URLs or a merge attestation. The receiver fetches the PR,
+current main, enforced branch protection and complete check-runs at the exact candidate SHA.
+Internal `merge-authorize` requires approved pinned cases, passing candidate evidence, a
+failed baseline reproduction, reviewed deployment targets and successful protected checks.
+Internal `merge-consume` consumes a short-lived authorization once before GitHub's exact-SHA
+merge request. Stop, changed evidence or cancellation invalidates it. An ambiguous submission
+is not retried automatically. `merge-complete` records an independently re-fetched merged PR.
 
-### `POST /automation/issues/merged`
+### External receiver operation `verification-start`
 
-Input: event/run identity, capability, consumed merge authorization, PR, prior head SHA and
-GitHub merge SHA. Re-fetch the PR and verify the exact authorized head was merged to `main`.
-Persist only the attestation. Existing deployment collectors must then observe the merge SHA;
-post-deployment regression/integration/browser reports and explicit owner/tester acceptance
-remain mandatory.
+This accepts the active capability only. Fresh deployment observations must match the exact
+merge SHA for every selected target. The server then pins the current deployment run/attempt,
+starts a new verification round and rotates the worker capability. A missing or mismatched
+deployment preserves the existing claim. Post-deployment regression/integration/browser
+reports and explicit owner/tester acceptance remain mandatory.
 
 All writes are idempotent by event/run/operation and reject stale events, expired leases,
 changed issue evidence, changed repository connection, foreign repositories, reused
@@ -119,9 +121,10 @@ attestations with different content, and mismatched SHAs.
 
 ## Readiness and evidence gap
 
-The checked-in workflow intentionally stops after sending a sanitized publication proposal,
-records `needs_input`, and releases its lease. Remove that stop only after the operations
-above and a trusted evidence harness exist.
+The checked-in workflow assesses complete harness coverage immediately after claiming an
+event, before source checkout, model execution or publication. Unsupported cases record
+`needs_input` and release their claim. The additional final stop remains until the full
+production workflow has a verified baseline, candidate and hosted verification sequence.
 The harness must execute a failing reproduction at the pinned base SHA and passing
 regression, integration and real browser tests at the exact candidate SHA, mapping every
 pinned Pandora case/version. It must submit structured reports through the existing delivery
@@ -151,12 +154,12 @@ issue event and perform no source writes.
 
 - `OPENAI_API_KEY`, `PANDORA_WORKER_TOKEN`, and `PANDORA_BRIDGE_URL` are provisioned in
   `Pandora-data`; secret-name presence alone does not prove provider authentication.
-- Trusted `publish-prepare`/`publish-complete`, merge-readiness and merged store operations
-  must be present in the integration base before the production runner is enabled.
-- A reviewed issue-specific regression/integration/browser evidence harness is not yet
-  available for unattended use. `scripts/run-delivery-tests.mjs` remains the intended
-  evidence producer, but it is not copied into the minimal runner and no model-created test
-  plan is accepted as command authority. The run therefore remains `needs_input`.
+- Publication, exact-SHA merge and deployment-transition guards are implemented and tested
+  in the integration branch. They have not yet completed a live source-repair pilot.
+- The trusted graph contract catalog supports local source regression/integration/browser
+  checks only. KG-010 is the selected pilot; full API/Search/Blob/graph isolation and hosted
+  post-deployment acceptance remain unsupported until its environment and independent test
+  identities are verified. See `runner/evidence/README.md`.
 - Automatic source writes stay restricted to `meids-app`; agent-config repository writes are
   disabled because its current private-repository plan cannot enforce the required branch
   protection.

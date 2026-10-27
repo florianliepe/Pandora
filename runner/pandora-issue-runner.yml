@@ -53,7 +53,15 @@ jobs:
           PANDORA_WORKER_TOKEN: ${{ secrets.PANDORA_WORKER_TOKEN }}
         run: node runner/bridge.mjs start --event-id "$EVENT_ID" --run-id "$GITHUB_RUN_ID"
 
+      - name: Check complete acceptance harness before source work
+        id: evidence
+        shell: bash
+        env:
+          PANDORA_BRIDGE_URL: ${{ secrets.PANDORA_BRIDGE_URL }}
+          PANDORA_WORKER_TOKEN: ${{ secrets.PANDORA_WORKER_TOKEN }}
+        run: node runner/assess-evidence.mjs --event-id "$EVENT_ID"
       - name: Check out pinned application base
+        if: ${{ steps.evidence.outputs.ready == 'true' }}
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           repository: florianliepe/meids-app
@@ -62,6 +70,7 @@ jobs:
           path: source
 
       - name: Set up Node
+        if: ${{ steps.evidence.outputs.ready == 'true' }}
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.3.0
         with:
           node-version: 24
@@ -69,6 +78,7 @@ jobs:
           cache-dependency-path: source/package-lock.json
 
       - name: Install application and browser dependencies
+        if: ${{ steps.evidence.outputs.ready == 'true' }}
         working-directory: source
         shell: bash
         run: |
@@ -76,10 +86,12 @@ jobs:
           npm ci --ignore-scripts
 
       - name: Prepare private prompt
+        if: ${{ steps.evidence.outputs.ready == 'true' }}
         shell: bash
         run: node runner/prepare-prompt.mjs --event-id "$EVENT_ID" --output .runner/private/prompt.txt
 
       - name: Renew claim before model execution
+        if: ${{ steps.evidence.outputs.ready == 'true' }}
         shell: bash
         env:
           PANDORA_BRIDGE_URL: ${{ secrets.PANDORA_BRIDGE_URL }}
@@ -87,6 +99,7 @@ jobs:
         run: node runner/bridge.mjs renew --event-id "$EVENT_ID"
 
       - name: Implement bounded candidate
+        if: ${{ steps.evidence.outputs.ready == 'true' }}
         timeout-minutes: 10
         uses: openai/codex-action@c05cfd74ad95c626cdf05c6685e62becc3bf7813
         with:
@@ -98,6 +111,7 @@ jobs:
           effort: high
 
       - name: Confirm current event and renew claim
+        if: ${{ steps.evidence.outputs.ready == 'true' }}
         shell: bash
         env:
           PANDORA_BRIDGE_URL: ${{ secrets.PANDORA_BRIDGE_URL }}
@@ -107,16 +121,19 @@ jobs:
           node runner/bridge.mjs renew --event-id "$EVENT_ID"
 
       - name: Verify candidate policy
+        if: ${{ steps.evidence.outputs.ready == 'true' }}
         shell: bash
         run: node runner/verify-source.mjs diff --event-id "$EVENT_ID" --root source
 
       - name: Prepare bounded source publication proposal
+        if: ${{ steps.evidence.outputs.ready == 'true' }}
         shell: bash
         run: |
           set -euo pipefail
           node runner/prepare-publication.mjs --event-id "$EVENT_ID" --root source --output .runner/private/publication-proposal.json
 
       - name: Request constrained trusted publication
+        if: ${{ steps.evidence.outputs.ready == 'true' }}
         shell: bash
         env:
           PANDORA_BRIDGE_URL: ${{ secrets.PANDORA_BRIDGE_URL }}
@@ -124,6 +141,7 @@ jobs:
         run: node runner/bridge.mjs publish --event-id "$EVENT_ID" --file .runner/private/publication-proposal.json
 
       - name: Record evidence harness prerequisite
+        if: ${{ steps.evidence.outputs.ready == 'true' }}
         shell: bash
         env:
           PANDORA_BRIDGE_URL: ${{ secrets.PANDORA_BRIDGE_URL }}
@@ -133,6 +151,7 @@ jobs:
           node runner/bridge.mjs finish --event-id "$EVENT_ID" --outcome needs_input --summary-file .runner/private/needs-input.txt
 
       - name: Stop unless trusted evidence and merge callbacks are implemented
+        if: ${{ steps.evidence.outputs.ready == 'true' }}
         shell: bash
         run: |
           echo "The receiver must implement publish, exact-SHA evidence, merge-readiness, and merged callbacks before automatic merge is enabled." >&2
