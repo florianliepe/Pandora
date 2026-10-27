@@ -2,9 +2,11 @@ import {cp,mkdtemp,readFile,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {spawnSync} from 'node:child_process';
+import {createHash} from 'node:crypto';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {decryptCapability,encryptCapability} from '../runner/capability-crypto.mjs';
+import {decodePinnedGitBlob} from '../runner/git-blob.mjs';
 import {approvedBridgeUrl,mergeAttestation,publicationProposal,requestEnvelope,SOURCE_REPOSITORY} from '../runner/protocol.mjs';
 
 const eventId='11111111-1111-4111-8111-111111111111';
@@ -39,6 +41,13 @@ test('capability is authenticated encrypted data and wrong worker token fails',(
  assert.throws(()=>decryptCapability(encrypted,'0'.repeat(64)));
 });
 
+test('pinned screenshot bytes must match size and Git blob SHA',()=>{
+ const bytes=Buffer.from('private screenshot bytes'),sha=createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex'),file={name:'evidence.png',type:'image/png',data:bytes.toString('base64'),sha,size:bytes.length};
+ assert.deepEqual(decodePinnedGitBlob(file),bytes);
+ assert.throws(()=>decodePinnedGitBlob({...file,sha:'0'.repeat(40)}));
+ assert.throws(()=>decodePinnedGitBlob({...file,size:bytes.length+1}));
+});
+
 test('publication proposal is bounded, sanitized and meids-app only',()=>{
  const valid={baseSha:base,files:[{path:'frontend/app.js',content:'change'}]};
  assert.equal(publicationProposal(valid).files.length,1);
@@ -60,7 +69,7 @@ test('production workflow uses env input, pinned actions, no source credential a
 });
 
 test('receiver uses dedicated header credential and disables n8n execution retention',async()=>{
- const receiver=JSON.parse(await readFile(new URL('../runner/issue-runner-receiver.workflow.json',import.meta.url),'utf8')),trigger=receiver.nodes.find(node=>node.name==='Runner callback');assert.equal(trigger.parameters.authentication,'headerAuth');assert.equal(trigger.credentials.httpHeaderAuth.name,'Pandora unattended runner (Intellectual Twin)');assert.equal(receiver.settings.saveDataSuccessExecution,'none');assert.equal(receiver.settings.saveDataErrorExecution,'none');const scope=receiver.nodes.find(node=>node.name==='Scope exact operation').parameters.jsCode;assert.match(scope,/Browser access is not supported/);assert.match(scope,/publish-prepare/);assert.ok(receiver.nodes.find(node=>node.name==='Complete publication'));assert.ok(receiver.nodes.filter(node=>node.credentials?.githubApi).every(node=>node.credentials.githubApi.id==='3V46mglu7fpoPISX'));assert.doesNotMatch(JSON.stringify(receiver),/PANDORA_WORKER_TOKEN|OPENAI_API_KEY|MEIDS_APP_GITHUB_TOKEN/);
+ const receiver=JSON.parse(await readFile(new URL('../runner/issue-runner-receiver.workflow.json',import.meta.url),'utf8')),trigger=receiver.nodes.find(node=>node.name==='Runner callback');assert.equal(trigger.parameters.authentication,'headerAuth');assert.equal(trigger.credentials.httpHeaderAuth.name,'Pandora unattended runner (Intellectual Twin)');assert.equal(receiver.settings.saveDataSuccessExecution,'none');assert.equal(receiver.settings.saveDataErrorExecution,'none');const scope=receiver.nodes.find(node=>node.name==='Scope exact operation').parameters.jsCode;assert.match(scope,/Browser access is not supported/);assert.match(scope,/publish-prepare/);assert.match(scope,/request\.operation==='cancelled'\?'\/automation\/issues\/status'/);assert.ok(receiver.nodes.find(node=>node.name==='Acknowledge cancellation'));assert.ok(receiver.nodes.find(node=>node.name==='Load pinned screenshot blob'));assert.ok(receiver.nodes.find(node=>node.name==='Verify screenshot blob'));const complete=receiver.nodes.find(node=>node.name==='Complete publication');assert.match(complete.parameters.workflowInputs.value.body,/headSha:\$json\.publish\.commitSha/);assert.ok(receiver.nodes.filter(node=>node.credentials?.githubApi).every(node=>node.credentials.githubApi.id==='3V46mglu7fpoPISX'));assert.doesNotMatch(JSON.stringify(receiver),/PANDORA_WORKER_TOKEN|OPENAI_API_KEY|MEIDS_APP_GITHUB_TOKEN/);
 });
 
 test('preflight is isolated from production event claiming and source writes',async()=>{

@@ -2,6 +2,7 @@ import {mkdir,readFile,writeFile,chmod} from 'node:fs/promises';
 import {dirname,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {decryptCapability,encryptCapability} from './capability-crypto.mjs';
+import {decodePinnedGitBlob} from './git-blob.mjs';
 import {approvedBridgeUrl,assertEventId,assertRunId,mergeAttestation,parseStartResponse,publicationProposal,requestEnvelope} from './protocol.mjs';
 
 const here=dirname(fileURLToPath(import.meta.url));
@@ -37,7 +38,8 @@ async function callback(operationName,transform=x=>x){const eventId=assertEventI
 async function status(){const eventId=assertEventId(option('--event-id')),state=await handoff(eventId),value=await call('status',eventId,state.runId,{});if(value.continue!==true)throw Error('Pandora event is no longer current');}
 async function cancelled(){const eventId=assertEventId(option('--event-id')),runId=assertRunId(option('--run-id'));await call('cancelled',eventId,runId,{});}
 async function preflight(){const eventId=assertEventId(option('--event-id')),runId=assertRunId(option('--run-id')),body=JSON.parse(await readFile(option('--file'),'utf8'));await call('preflight',eventId,runId,body);}
+async function evidence(){const eventId=assertEventId(option('--event-id')),state=await context(eventId),input=JSON.parse(await readFile(option('--file'),'utf8')),value=await call('evidence',eventId,state.runId,{...state.capability,attachmentId:input.attachmentId}),bytes=decodePinnedGitBlob(value?.file);await secureWrite(resolve(option('--output')),bytes);}
 
-const commands={preflight,start,status,cancelled,renew:()=>callback('renew'),evidence:()=>callback('evidence',value=>({attachmentId:value.attachmentId})),report:()=>callback('report',report=>({report})),finish:()=>callback('finish'),publish:()=>callback('publish',value=>publicationProposal(value)),'merge-readiness':()=>callback('merge-readiness',value=>mergeAttestation(value)),merged:()=>callback('merged',value=>value)};
+const commands={preflight,start,status,cancelled,renew:()=>callback('renew'),evidence,report:()=>callback('report',report=>({report})),finish:()=>callback('finish'),publish:()=>callback('publish',value=>publicationProposal(value)),'merge-readiness':()=>callback('merge-readiness',value=>mergeAttestation(value)),merged:()=>callback('merged',value=>value)};
 if(!commands[command])throw Error('Unknown bridge command');
 await commands[command]();

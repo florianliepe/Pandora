@@ -12,6 +12,7 @@ Copy this package into the private `florianliepe/Pandora-data` repository:
 - `runner/pandora-issue-runner.yml` -> `.github/workflows/pandora-issue-runner.yml`
 - `runner/pandora-runner-preflight.yml` -> `.github/workflows/pandora-runner-preflight.yml`
 - `runner/bridge.mjs`, `runner/protocol.mjs`, `runner/capability-crypto.mjs`,
+  `runner/git-blob.mjs`,
   `runner/prepare-prompt.mjs`, `runner/prepare-publication.mjs`, and
   `runner/verify-source.mjs` -> `runner/`
 
@@ -125,6 +126,16 @@ The harness must execute a failing reproduction at the pinned base SHA and passi
 regression, integration and real browser tests at the exact candidate SHA, mapping every
 pinned Pandora case/version. It must submit structured reports through the existing delivery
 worker API. A model-authored summary, test command, or check name is never proof.
+
+Pinned screenshot retrieval first authorizes the attachment through the active delivery
+capability, then the receiver loads only that SHA from private `Pandora-data`. The runner
+stores no metadata-only substitute: it decodes the returned bytes, recomputes Git's
+`SHA-1("blob <length>\\0" + bytes)` identity, checks the bounded size, and writes the file
+privately without logging its response or content.
+
+Cancellation is similarly two-stage. The external callback carries the event and GitHub run
+ID. The receiver calls internal `status` first, requiring the same run identity and
+`cancellation_requested`, and only then invokes the run-ID-free internal acknowledgement.
 
 After merge, existing deployment observations must show the merge SHA for every selected
 target. Post-deployment reports must run against those observed targets. The tester's
