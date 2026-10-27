@@ -20,7 +20,7 @@ function keys(value, expected, label) {
 }
 
 function text(value, label, pattern = null) {
-  if (typeof value !== "string" || !value.trim() || value.length > 300 || (pattern && !pattern.test(value))) {
+  if (typeof value !== "string" || !value.trim() || /^REQUIRED/i.test(value) || value.length > 300 || (pattern && !pattern.test(value))) {
     throw new Error(`${label} is invalid`);
   }
   return value;
@@ -28,6 +28,7 @@ function text(value, label, pattern = null) {
 
 function httpsOrigin(value, label, suffix = "") {
   const url = new URL(text(value, label));
+  if(url.hostname.toLowerCase().includes('required-'))throw new Error(`${label} still contains a configuration placeholder`);
   if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash || url.pathname !== "/") {
     throw new Error(`${label} must be a bare HTTPS origin`);
   }

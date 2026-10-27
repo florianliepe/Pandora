@@ -74,3 +74,21 @@ Before enabling the probe, independently verify the approved resource inventory,
 signature/issuer/audience/expiry and actual server-authenticated subjects. Preserve the raw
 observations privately and bind them to the exact deployed revision. A self-declared
 `nonproduction` label or a JSON object containing `passed` is never acceptance evidence.
+
+### Prepare the synthetic dataset without executing it
+
+Choose a fresh version-4 run UUID. Fill a private copy of the prerequisite manifest with
+reviewed resource and principal bindings, setting each `expectedTwinId` to
+`pandora-kg010-<run UUID>-principal_a` or `-principal_b`. Then generate a plan:
+
+```text
+node runner/evidence/kg010-fixtures.mjs --manifest .local/kg010/manifest.json --run-id <run UUID> --output .local/kg010/fixture-plan.json
+```
+
+This command writes a new configuration file only; it makes no network or database call.
+It defines two private synthetic records, run-specific blob keys, graph identifiers, all
+eight isolation checks and an exact cleanup inventory. The revocation step removes only
+the run-created test-twin assignment; it never changes an Entra account/group or a real
+existing twin. Cleanup must verify ownership before deleting the enumerated objects, drain
+only their outbox entries, and must not delete whole databases, containers or indexes.
+The plan is not an executable probe and does not produce passing test results.
