@@ -71,3 +71,27 @@ Goal-writing reference: [OpenAI Goals guidance](https://developers.openai.com/co
 - Local unit/API/runtime tests, frontend syntax/build, and browser acceptance passed. A new
   API scenario also verifies private snapshot access and cancellation. This increment is
   not deployed yet; authenticated execution and PR/result/deployment correlation remain next.
+
+## Voice-record recheck evidence (development-agent handoff)
+
+The user confirms the voice-record issue is fixed. The development agent supplied these
+existing revisions and observations; they are not a new fix produced by this goal:
+
+- `fb060010957b785ba9aef2d277530e332bb02240`: voice concept quality and handoff review fix.
+- `0cf25ffab4b19ee8814f253fc4d1933b7a862039`: successful voice-draft live regression evidence.
+- `dff1351`: voice-draft load-event fix (short identifier supplied; resolve before correlation).
+- Successful deployment runs for `fb06001`: backend `40475614741`, Azure frontend
+  `40475614726`, Pages sandbox `40475614990`.
+- Reported checks: backend contract suite, frontend syntax, audio-upload contracts and diff checks.
+- Reported live observations: draft reloaded, quality recalculated from 67% to 81%, Who
+  recognized, What left open, Ready to save displayed, Save enabled, Approve exposed,
+  and node-detail GET no longer returned 404.
+- Explicit gap: Save/Approve was not executed because it changes governed knowledge.
+  Do not convert these observations into proof of persisted Save/Approve behavior.
+  Any such recheck requires an appropriate authorized test record and acceptance action.
+- Second component implemented locally: owner/developer PR-link requests and an n8n
+  read-only collector extension verify the PR repository/base branch, an exact opaque
+  `Pandora-Delivery` marker, candidate SHA and merge SHA. Relinked, cancelled, disconnected
+  and out-of-order observations are rejected; failures retain clearly stale observations.
+  PR correlation does not change functional test, issue or delivery status. New tests passed;
+  publication remains pending while job execution and exact-commit test ingestion are built.
