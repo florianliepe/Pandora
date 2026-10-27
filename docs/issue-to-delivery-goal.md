@@ -108,3 +108,15 @@ existing revisions and observations; they are not a new fix produced by this goa
   exact-SHA report ingestion and review-readiness checks without production issue writes.
   The temporary fixture workflow was removed. These are protocol tests, not a real fix or
   persisted Save/Approve verification. The public handoff/queue UI remains in draft PR #5.
+- 2026-10-27 revision evidence: isolated development-repository draft PR
+  https://github.com/florianliepe/meids-app/pull/23 adds frontend/backend packaged-revision
+  probes. Three probe tests, backend/agent contracts and static build/smoke passed locally;
+  GitHub read-only validation passed. No development-repository merge/deploy was performed.
+  The development agent was notified; human source merge approval is still required.
+- Pandora now has a tested pure deployment-evidence validator for the three fixed targets.
+  It cross-checks the served full SHA, repository, component, exact GitHub workflow/run/attempt,
+  main branch, successful deployment and timestamp ordering. Missing/stale manifests and
+  mismatched runs fail closed. Application probes carry no GitHub authentication. Four tests
+  passed. This validator is not wired into a live collector yet and does not claim functional
+  verification. Next: explicit per-handoff target selection, authenticated collector storage,
+  verification-worker lifecycle and tester acceptance/reopen gates, then the new real pilot.
