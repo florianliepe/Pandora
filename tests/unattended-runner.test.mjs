@@ -73,5 +73,5 @@ test('receiver uses dedicated header credential and disables n8n execution reten
 });
 
 test('preflight is isolated from production event claiming and source writes',async()=>{
- const workflow=await readFile(new URL('../runner/pandora-runner-preflight.yml',import.meta.url),'utf8');assert.match(workflow,/mode:\s*\n\s*description: Nondestructive readiness probe/);assert.match(workflow,/\n\s+- evidence\n/);assert.match(workflow,/00000000-0000-4000-8000-000000000001/);assert.match(workflow,/receiverWorkflowPath:\"runner\/issue-runner-receiver\.workflow\.json\"/);assert.match(workflow,/if: \$\{\{ cancelled\(\) \}\}/);assert.doesNotMatch(workflow,/meids-app|git push|gh pr create/);
+ const workflow=await readFile(new URL('../runner/pandora-runner-preflight.yml',import.meta.url),'utf8');assert.match(workflow,/mode:\s*\n\s*description: Nondestructive readiness probe/);assert.match(workflow,/\n\s+- evidence\r?\n/);assert.match(workflow,/00000000-0000-4000-8000-000000000001/);assert.match(workflow,/receiverWorkflowPath:\"runner\/issue-runner-receiver\.workflow\.json\"/);assert.match(workflow,/if: \$\{\{ cancelled\(\) \}\}/);assert.doesNotMatch(workflow,/meids-app|git push|gh pr create/);
 });
