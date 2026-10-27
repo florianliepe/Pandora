@@ -171,3 +171,11 @@ only the former to be retried. No KG acceptance case has been marked passed by t
 
 The runner checkout uses non-cone sparse patterns for `/runner/` and `/.github/workflows/`;
 it does not download `state.json` or screenshot storage from the data repository.
+
+Hosted provider run `40551810575` completed successfully, including both n8n callbacks;
+the store records its `completed` phase. Cancellation run `40551645430` was independently
+cancelled in GitHub and its authenticated `cancelled` phase is recorded in Pandora.
+The initial Codex Action `drop-sudo` startup failed while restricting a system socket;
+the successful provider probe uses the documented `unprivileged-user` strategy and an
+empty dedicated working directory. This confirms provider execution only, not the full
+production repair workflow or KG acceptance coverage. Production automation remains off.
