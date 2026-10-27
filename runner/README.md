@@ -149,8 +149,8 @@ issue event and perform no source writes.
 
 ## Current blockers
 
-- `OPENAI_API_KEY` must be provisioned in `Pandora-data` before a run can start.
-- The API Platform project/sign-in and budget owner must be confirmed.
+- `OPENAI_API_KEY`, `PANDORA_WORKER_TOKEN`, and `PANDORA_BRIDGE_URL` are provisioned in
+  `Pandora-data`; secret-name presence alone does not prove provider authentication.
 - Trusted `publish-prepare`/`publish-complete`, merge-readiness and merged store operations
   must be present in the integration base before the production runner is enabled.
 - A reviewed issue-specific regression/integration/browser evidence harness is not yet
@@ -160,3 +160,14 @@ issue event and perform no source writes.
 - Automatic source writes stay restricted to `meids-app`; agent-config repository writes are
   disabled because its current private-repository plan cannot enforce the required branch
   protection.
+
+## Integration checkpoint (2026-10-27)
+
+The dedicated receiver and the internal store are deployed for isolated readiness probes.
+Only the preflight workflow is installed in `Pandora-data`. Production issue dispatch and
+automatic merge remain disabled. The first hosted callback encountered storage contention;
+the store now distinguishes pre-write lease contention from ambiguous save conflicts, allowing
+only the former to be retried. No KG acceptance case has been marked passed by these probes.
+
+The runner checkout uses non-cone sparse patterns for `/runner/` and `/.github/workflows/`;
+it does not download `state.json` or screenshot storage from the data repository.

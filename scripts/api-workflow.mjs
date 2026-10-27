@@ -18,7 +18,7 @@ if(!request||typeof request.path!=='string'||!/^\\/[a-zA-Z0-9_/-]+$/.test(reques
 const origin=w.headers?.origin;if(origin&&origin!=='https://florianliepe.github.io')return respond(403,'Origin not allowed');
 if(request.path==='/health')return [{json:{ready:false,response:{status:200,body:{status:'ok',mailReady:true,storage:'github-private-repository',agentReady:false}}}}];
 if(!row.payload)return respond(503,'Authentication store unavailable');
-if(row.lockUntil>Date.now())return respond(409,'Another request is saving. Please retry shortly.');
+if(row.lockUntil>Date.now())return [{json:{response:{status:409,body:{error:'Another request is saving. Please retry shortly.',code:'storage_lease_contention'}},ready:false}}];
 let auth;try{auth=JSON.parse(row.payload);}catch{return respond(503,'Authentication store unavailable');}
 if(typeof request.token!=='undefined'&&(typeof request.token!=='string'||request.token.length>256))return respond(400,'Invalid session');
 if(!['/auth/request','/auth/verify'].includes(request.path)&&!(auth.sessions||[]).some(s=>s.hash===Pandora.tokenHash(request.token||'')&&s.expires>Date.now()))return respond(401,'Please sign in');
@@ -26,7 +26,7 @@ const hour=Math.floor(Date.now()/3600000);const budget=auth.budget?.hour===hour?
 return [{json:{ready:true,row,auth,request,entropy:$('Entropy').first().json.entropy,leaseToken:$('Entropy').first().json.entropy,revision:row.revision+1,lockUntil:Date.now()+120000}}];`);
 flag('Request ready','ready');
 dt('Acquire lease','update',[condition('workspace','main'),condition('revision','={{ $("Prepare").first().json.row.revision }}'),condition('lockUntil','={{ $("Prepare").first().json.row.lockUntil }}')],{revision:'={{ $("Prepare").first().json.revision }}',lockUntil:'={{ $("Prepare").first().json.lockUntil }}',leaseToken:'={{ $("Prepare").first().json.leaseToken }}'});
-code('Check lease',`const p=$('Prepare').first().json;return [{json:{acquired:$json.leaseToken===p.leaseToken,response:{status:409,body:{error:'Another request is saving. Please retry shortly.'}}}}];`);
+code('Check lease',`const p=$('Prepare').first().json;return [{json:{acquired:$json.leaseToken===p.leaseToken,response:{status:409,body:{error:'Another request is saving. Please retry shortly.',code:'storage_lease_contention'}}}}];`);
 flag('Lease acquired','acquired');
 http('Read Git state','GET',repo+'/contents/state.json?ref=main');
 code('Apply request',bundle+`\nconst p=$('Prepare').first().json;let result;if($json.statusCode!==200||!$json.body?.content){result={response:{status:503,body:{error:'Private data repository unavailable'}},authNext:p.auth,writeGit:false};}else{try{const snapshot=JSON.parse(Buffer.from($json.body.content,'base64').toString('utf8'));result=await Pandora.run({snapshot,auth:p.auth,request:p.request,entropy:p.entropy,config:{mailReady:true,agentReady:false}});}catch{result={response:{status:503,body:{error:'Unable to process request'}},authNext:p.auth,writeGit:false};}}return [{json:result}];`);
