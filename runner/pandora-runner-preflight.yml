@@ -46,6 +46,13 @@ jobs:
           PANDORA_WORKER_TOKEN: ${{ secrets.PANDORA_WORKER_TOKEN }}
         run: node runner/bridge.mjs preflight --event-id 00000000-0000-4000-8000-000000000001 --run-id "${{ github.run_id }}" --file .runner/private/preflight.json
 
+      - name: Prepare isolated provider user
+        if: ${{ inputs.mode == 'provider' }}
+        shell: bash
+        run: |
+          sudo useradd --create-home --shell /bin/bash pandora-codex
+          sudo install -d -o pandora-codex -g pandora-codex -m 0700 /tmp/pandora-provider
+
       - name: Verify provider authentication
         if: ${{ inputs.mode == 'provider' }}
         uses: openai/codex-action@c05cfd74ad95c626cdf05c6685e62becc3bf7813
@@ -53,8 +60,11 @@ jobs:
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
           permission-profile: ":read-only"
+          safety-strategy: unprivileged-user
+          codex-user: pandora-codex
+          working-directory: /tmp/pandora-provider
           prompt: "Return only the word READY. Do not read repository files."
-          output-file: .runner/private/provider-result.txt
+          output-file: /tmp/pandora-provider/result.txt
           effort: low
 
       - name: Wait for explicit cancellation
