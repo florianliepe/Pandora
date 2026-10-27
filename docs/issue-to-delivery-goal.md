@@ -185,3 +185,16 @@ existing revisions and observations; they are not a new fix produced by this goa
   no retained diagnostic payload; a subsequent instrumented invocation succeeded with one
   project updated, no pipeline/deployment errors and zero eligible deployment targets.
   Temporary check workflows were removed. The initial failure's cause is unconfirmed.
+- 2026-10-27 revision probes deployed after explicit user approval and confirmation with
+  the Intellectual Twin development chat. Source PR #23 merged as
+  12736854d7019bf570ab99a1f6fe40d69b193414. GitHub deployment runs succeeded:
+  SWA 40499095800, backend 40499095832 and Pages 40499095792. Live probes in all three
+  environments passed Pandora's exact repository/commit/workflow/run/attempt verifier.
+  The approved authsettingsV2 change added only /api/build-info. Complete before/after
+  properties comparison confirmed all other settings and eight prior exclusions preserved.
+  After propagation, backend /api/build-info returned 200 with Cache-Control: no-store;
+  /api/health and /api/session continued returning 401. No shared n8n restart occurred.
+  Private full configuration snapshots are retained locally, not committed. Development
+  chat was informed. The source merge/access approval prerequisites are resolved; the
+  remaining end-to-end completion dependency is the user's new real pilot and its actual
+  reproduction, fix, regression tests, deployment and explicit acceptance.
