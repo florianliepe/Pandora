@@ -252,3 +252,56 @@ No isolation or approval-boundary failure may be waived. Other P1 waivers requir
 owner, mitigation and review date. Semantic scores never approve, merge or expose knowledge.
 The recovery pilot remains proposed; this synchronization does not replace the user's new
 pilot or declare the overarching issue-to-delivery goal complete.
+
+## Owner-controlled issue events — design clarification pending
+
+The user requested live KG-008 through KG-014 issue/case records and an owner Start/Stop
+control that dispatches new or updated issues to the existing Intellectual Twin development
+chat, with results returned to Pandora. The seven issue records were created through the
+authenticated application on 2026-10-27; KG-010 is critical and the others are high priority.
+Historical evidence limitations remain explicit in their descriptions and actual results.
+No new passing test execution or delivery acceptance is implied by backlog creation.
+
+| Source item | Live Pandora issue ID | Linked acceptance cases |
+|---|---|---|
+| KG-010 | da380680-c1e3-414d-a4b9-0aa3fdf58912 | ISO-01, ISO-02 |
+| KG-009 | dbec6edb-89c7-4f73-bac6-d23edc19017b | TX-01, OUT-01, OUT-02, OUT-03 |
+| KG-008 | 83ef87ab-3a4a-4fc3-ab41-8f8115535917 | REC-01 |
+| KG-013 | 4172881f-ca69-499a-a215-ca51a5a002a7 | AGT-02 |
+| KG-012 | dd9513e8-aa28-4b63-88df-d0d049fcea5e | AGT-01 |
+| KG-014 | ed78a4fb-6dfb-4532-b774-ea35364ce54f | REC-02 — prepared; pending renewed login |
+| KG-011 | fc07636a-fb87-46fd-8883-fe29212db162 | SEM-02 — prepared; pending renewed login |
+
+Nine manual acceptance cases were verified in private repository state, with zero test runs.
+The UI session then expired while saving REC-02. That save was rejected with "Please sign in";
+REC-02 and SEM-02 must be added after renewed authentication, not counted as already saved.
+
+Before enabling dispatch, resolve the requested event filter, source merge/deploy approval
+policy, active-work cancellation behavior and execution host. Recommended event filtering
+excludes agent/status-only feedback to prevent recursive runs. Owner controls must be
+server-authorized, version-checked and audited; dispatch must default off. A stopped or
+superseded event cannot acquire new work or submit a stale result. Restart behavior must
+be explicit rather than silently replaying all historical issues.
+
+Reuse the existing project-scoped delivery claims, immutable evidence snapshots, correlated
+PR observations, pinned test reports, deployment checks and explicit acceptance gate.
+Event delivery needs durable deduplication, debounce, bounded retries, one active execution
+per issue, visible failure/needs-input states and a narrowly scoped bridge identity.
+Issue text and screenshots are evidence, never executable instructions or authorization.
+Stop cannot undo a completed merge or deployment; it must report any irreversible action
+already completed and whether cancellation was acknowledged.
+
+The official Codex App Server documents thread/resume, turn/start and turn/interrupt:
+https://developers.openai.com/codex/app-server . This does not establish that an external
+n8n workflow can call the desktop chat directly. The installed CLI exposes app-server proxy,
+but the local daemon version probe could not connect to the control socket on 2026-10-27.
+No daemon was started/restarted, no remote-control access was enabled, and no second process
+was permitted to write the desktop-owned chat. Verify a supported single-writer connection
+before enabling the bridge; do not substitute a scheduled poll and describe it as push delivery.
+
+The development chat confirmed preparation order KG-010, KG-009, KG-008, KG-013,
+KG-012, KG-014, KG-011. Full KG-010 execution requires two dedicated Entra identities
+in different authorized scopes, separate twins/records/Blob paths/Search filters/graph
+projections, synthetic markers, read-only observability, cleanup and explicit stop criteria.
+Local synthetic tests cannot close the real-service isolation gap. The development chat
+also confirmed that direct event ingress into its existing desktop conversation is unverified.
