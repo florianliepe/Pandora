@@ -41,6 +41,8 @@ test("KG010 renders complete secret-free parameters for the existing Me.IDs Bice
   assert.equal(foundation.parameters.knowledgeFabricWebhookUrl.value, "");
   assert.equal(backendAuthPolicy.properties.globalValidation.unauthenticatedClientAction, "Return401");
   assert.deepEqual(backendAuthPolicy.properties.identityProviders.azureActiveDirectory.validation.allowedAudiences, ["api://meids-kg010"]);
+  assert.equal(backendAuthPolicy.properties.identityProviders.azureActiveDirectory.registration.clientId, "REQUIRED_KG010_ENTRA_CLIENT_ID");
+  assert.equal(backendAuthPolicy.properties.identityProviders.azureActiveDirectory.registration.clientIdSettingName, undefined);
   const serialized = JSON.stringify({ foundation, dataPlane, backendSettings, backendAuthPolicy });
   assert.doesNotMatch(serialized, /password|accessToken|secretValue|apiKey/i);
   assert.doesNotMatch(serialized, /psql-meids-prod|stmeidsprod|srch-meids-prod|meids_prod/);

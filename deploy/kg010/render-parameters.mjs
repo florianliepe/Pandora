@@ -129,7 +129,7 @@ export function buildBackendAuthPolicy(config) {
           enabled: true,
           registration: {
             openIdIssuer: `https://login.microsoftonline.com/${config.azure.tenantId}/v2.0`,
-            clientIdSettingName: auth.clientIdSettingName,
+            clientId: "REQUIRED_KG010_ENTRA_CLIENT_ID",
             clientSecretSettingName: auth.clientSecretSettingName
           },
           validation: { allowedAudiences: [auth.allowedAudience] }

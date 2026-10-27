@@ -111,7 +111,11 @@ what-if plans are explicit human gates; this package does neither.
    foundation disables public Search and Storage access before backend code is
    deployed; private endpoints and VNet integration are completed in phase two.
 4. Create the dedicated app registration and store its runtime client binding in the
-   dedicated vault. Apply `backend-auth.policy.json` to the backend Auth Settings V2.
+   dedicated vault. Copy `backend-auth.policy.json` to an ignored runtime file and
+   replace `REQUIRED_KG010_ENTRA_CLIENT_ID` with the dedicated application client ID.
+   Auth Settings V2 requires a literal `registration.clientId`; it does not resolve
+   `clientIdSettingName`. Never apply the placeholder policy. Bind the secret through
+   `KG010_ENTRA_CLIENT_SECRET`, then apply the runtime policy to Auth Settings V2.
    Before any application/data seed, prove that no token, a wrong-audience token and
    a forged `x-ms-client-principal` header each receive HTTP 401.
 5. Deploy the backend package from the pinned commit. Apply `backend.settings.json`.
