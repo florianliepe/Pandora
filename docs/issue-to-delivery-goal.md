@@ -177,3 +177,11 @@ existing revisions and observations; they are not a new fix produced by this goa
   for source PR #23 merge/deploy and that exact-path exception is pending. No hosting auth
   settings have been changed. User-provided new pilot and authenticated live UI verification
   also remain pending; protocol fixtures and deployed assets do not establish pilot completion.
+- Authenticated live browser recheck used the user's existing session (no new OTP). After
+  reloading the published frontend, the Intellectual Twin workspace, handoff controls,
+  generated test drafts and current repository observations rendered. The private screenshot
+  fetched and rendered successfully. The existing fixed issue was left unchanged and no
+  duplicate fix was queued. A full collector invocation initially returned an error with
+  no retained diagnostic payload; a subsequent instrumented invocation succeeded with one
+  project updated, no pipeline/deployment errors and zero eligible deployment targets.
+  Temporary check workflows were removed. The initial failure's cause is unconfirmed.
