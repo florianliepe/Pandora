@@ -1,5 +1,5 @@
 import {selectDeploymentTargets} from './deployment-worker.mjs';
-import {queueDelivery} from './delivery-worker.mjs';
+import {queueDelivery,queueVerification,decideDelivery,deliveryClosureGate} from './delivery-worker.mjs';
 import {prepareDelivery,deliveryContext,cancelDelivery,publicJob,requestPullLink} from './delivery.mjs';
 import {queueTests,evidenceFields,derivedTestStatus,syncTestStatuses,cadenceSchema,ensureIterations,iterationSuggestion} from './quality.mjs';
 import {createHash,randomBytes,randomInt,timingSafeEqual} from 'node:crypto';
@@ -68,6 +68,8 @@ const mailReady=!!deliverMail;
   app.post('/api/projects/:projectId/issues/:id/deliveries',async(req,res)=>{const result=await store.change(s=>prepareDelivery(s,req.params.projectId,req.params.id,req.user.id,req.body));res.status(201).json(result);});
   app.post('/api/projects/:projectId/deliveries/:id/queue',async(req,res)=>{const {version}=z.object({version:z.number().int().positive()}).strict().parse(req.body);res.json(await store.change(s=>queueDelivery(s,req.params.projectId,req.params.id,req.user.id,version)));});
   app.put('/api/projects/:projectId/deliveries/:id/targets',async(req,res)=>res.json(await store.change(s=>selectDeploymentTargets(s,req.params.projectId,req.params.id,req.user.id,req.body))));
+  app.post('/api/projects/:projectId/deliveries/:id/verification',async(req,res)=>{const {version}=z.object({version:z.number().int().positive()}).strict().parse(req.body);res.json(await store.change(s=>queueVerification(s,req.params.projectId,req.params.id,req.user.id,version)));});
+  app.post('/api/projects/:projectId/deliveries/:id/decision',async(req,res)=>res.json(await store.change(s=>decideDelivery(s,req.params.projectId,req.params.id,req.user.id,req.body))));
   app.put('/api/projects/:projectId/deliveries/:id/pull',async(req,res)=>res.json(await store.change(s=>requestPullLink(s,req.params.projectId,req.params.id,req.user.id,req.body))));
   app.get('/api/projects/:projectId/deliveries/:id/context',async(req,res)=>{const s=await store.read();res.json(deliveryContext(s,req.params.projectId,req.params.id,req.user.id));});
   app.post('/api/projects/:projectId/deliveries/:id/cancel',async(req,res)=>{const {version}=z.object({version:z.number().int().positive()}).strict().parse(req.body);res.json(await store.change(s=>cancelDelivery(s,req.params.projectId,req.params.id,req.user.id,version)));});
@@ -101,9 +103,13 @@ const mailReady=!!deliverMail;
             if(!graph[item.status].includes(data.status))fail(400,'Invalid status transition');
             if(m.role==='tester'&&!['verified','reopened'].includes(data.status))fail(403,'Tester can verify or reopen issues');
             if(['verified','closed'].includes(data.status)&&!['owner','tester'].includes(m.role))fail(403,'Owner or tester verification required');
+            const hasDelivery=(s.deliveries||[]).some(j=>j.issueId===item.id&&j.projectId===p&&j.state!=='cancelled');
+            if(hasDelivery&&data.status==='verified')fail(409,'Use the delivery acceptance action to verify this issue');
+            const deliveryAccepted=hasDelivery&&data.status==='closed'&&deliveryClosureGate(s,item);
+            if(deliveryAccepted&&evidenceFields.some(k=>data[k]!==item[k]))fail(409,'Save report changes separately and reverify delivery');
             const ready=s.events.filter(e=>e.entityId===item.id&&e.after?.status==='ready_for_test'&&e.before?.status!=='ready_for_test').at(-1)?.at||item.updatedAt;
             const latest=s.runs.filter(r=>r.projectId===p&&r.issueId===item.id&&!r.deletedAt).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt))[0];
-            if(['verified','closed'].includes(data.status)&&(!latest||latest.result!=='passed'||latest.createdAt<ready||derivedTestStatus(s,item)!=='passed'))fail(400,'A passing linked test run after the fix is ready for test is required');
+            if(!deliveryAccepted&&['verified','closed'].includes(data.status)&&(!latest||latest.result!=='passed'||latest.createdAt<ready||derivedTestStatus(s,item)!=='passed'))fail(400,'A passing linked test run after the fix is ready for test is required');
           }
         }
         const before=structuredClone(item);Object.assign(item,data,{version:item.version+1,updatedAt:now()});

@@ -3,7 +3,7 @@ import {readFile,writeFile,mkdir,chmod} from 'node:fs/promises';
 import {resolve,join} from 'node:path';
 import {execFileSync} from 'node:child_process';
 const [action,...args]=process.argv.slice(2),value=flag=>args[args.indexOf(flag)+1];
-if(!['claim','renew','evidence','report','finish'].includes(action))throw Error('Usage: delivery-worker.mjs claim | renew/evidence/report/finish --job <UUID> [--file <report.json>] [--outcome awaiting_review|needs_input|failed --summary-file <file>]');
+if(!['claim','renew','evidence','report','finish'].includes(action))throw Error('Usage: delivery-worker.mjs claim | renew/evidence/report/finish --job <UUID> [--file <report.json>] [--outcome awaiting_review|ready_for_verification|needs_input|failed --summary-file <file>]');
 const secret=(await readFile(process.env.PANDORA_DELIVERY_WORKER_SECRET_FILE||'.local/delivery-worker-secret','utf8')).trim();
 const origin=new URL(process.env.N8N_API_BASE_URL);if(origin.protocol!=='https:'||origin.hostname!=='eraneos-agentic-platform.azurewebsites.net'||origin.username||origin.password||origin.search||origin.hash||!['','/'].includes(origin.pathname))throw Error('Worker endpoint must be the approved n8n origin');
 const endpoint=origin.origin+'/webhook/pandora-delivery-worker-v1';

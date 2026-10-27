@@ -130,3 +130,14 @@ existing revisions and observations; they are not a new fix produced by this goa
   target-selection acceptance, collector tests and runtime/frontend builds passed. Workflow
   files are generated but this collector increment is not deployed yet. Next: integrate the
   post-deployment worker lifecycle and explicit tester acceptance/reopening before publishing.
+- 2026-10-27 verification lifecycle: added explicit post-deployment queueing, numbered
+  verification rounds and per-target deployment baselines. Worker reports now require the
+  selected target, exact served SHA/run/attempt and execution after the current request.
+  Every target requires regression/integration/browser coverage. Owner/tester acceptance
+  and reopening use optimistic versions, notes, audit and notifications; generic issue
+  verification cannot bypass the delivery gate. No manual test runs are synthesized.
+  Local suite: 71 passed, one PostgreSQL test skipped; existing browser acceptance and
+  runtime/frontend builds passed. New lifecycle server tests cover full acceptance/reopen,
+  stale reports, changed attempts and changed evidence. Dedicated browser acceptance of
+  the decision controls, live n8n protocol validation and truthful test producers remain
+  pending before publication, followed by the user-provided real pilot.

@@ -76,3 +76,25 @@ The pilot allows 20 reports per handoff and retains the existing 700 KB aggregat
 Large logs belong in private artifacts, not the aggregate. Expand storage before scaling
 concurrency or report volume. CLI retries only explicit pre-write lease-contention responses;
 it does not replay ambiguous network failures.
+
+## Post-deployment verification protocol
+
+Owner/developer requests `POST /projects/:projectId/deliveries/:id/verification` with the
+current handoff version after a merged correlated PR, complete candidate evidence and fresh
+matching observations for every selected target. The normal worker claim returns
+`executionPhase: verification` and `verificationBasis` with a numbered round and pinned
+per-target commit/run/attempt. It does not authorize merging or deploying source repositories.
+
+Submit `phase: post_deployment` reports with `targetId` and the matching target environment.
+Tests must start after this verification request. Every target requires regression,
+integration and browser results with passing coverage of the pinned cases. Changed deployment
+attempts, stale observations, old rounds, wrong targets and incomplete results cannot satisfy
+the finish gate. Use finish outcome `ready_for_verification`; candidate `awaiting_review` is
+not valid during verification. Reproduction/candidate reports remain separate.
+
+Owner/tester records an explicit accept/reopen decision with handoff and issue versions and
+notes at `POST /projects/:projectId/deliveries/:id/decision`. Acceptance rechecks current
+report, test, PR, deployment and verification evidence. It changes the issue to verified;
+reopening changes it to reopened. No manual test runs are invented. Delivery-linked issues
+cannot bypass this gate through the generic status editor. These protocol changes remain
+unpublished until the live rollout is validated.
