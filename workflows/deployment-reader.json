@@ -1,0 +1,353 @@
+{
+  "name": "Pandora | verify served deployment revisions",
+  "nodes": [
+    {
+      "id": "every-five-minutes",
+      "name": "Every five minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "id": "internal-trigger",
+      "name": "Internal trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "typeVersion": 1.1,
+      "position": [
+        260,
+        0
+      ]
+    },
+    {
+      "id": "get-targets",
+      "name": "Get targets",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "KblOJCQpInwzyg1a"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "path": "/automation/deployments/targets",
+            "method": "POST"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "typeVersion": 1.2,
+      "position": [
+        520,
+        0
+      ]
+    },
+    {
+      "id": "prepare-probes",
+      "name": "Prepare probes",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "var Deployment = (function (exports) {\n\t'use strict';\n\n\t// Read-only revision evidence. Fixed targets prevent client-controlled network destinations.\n\tconst deploymentTargets=Object.freeze([\n\t {id:'production_frontend',component:'frontend',workflowId:354029928,environment:'Azure Static Web Apps',url:'https://victorious-flower-0f10a8303.6.azurestaticapps.net/build-info.json'},\n\t {id:'production_backend',component:'backend',workflowId:390689734,environment:'Azure App Service',url:'https://meids-prod-backend-1853a19b.azurewebsites.net/api/build-info'},\n\t {id:'sandbox_frontend',component:'frontend',workflowId:328868831,environment:'GitHub Pages',url:'https://florianliepe.github.io/meids-app/build-info.json'}\n\t].map(Object.freeze));\n\tconst repository='florianliepe/meids-app';\n\tconst sha=v=>typeof v==='string'&&/^[a-f0-9]{40}$/.test(v);\n\tconst positive=v=>Number.isSafeInteger(v)&&v>0;\n\tconst time=v=>typeof v==='string'&&Number.isFinite(Date.parse(v))?Date.parse(v):NaN;\n\tconst fields=['schemaVersion','available','component','repository','commit','runId','runAttempt','builtAt'];\n\tfunction deploymentProbe(targetId){const target=deploymentTargets.find(t=>t.id===targetId);return target?{targetId,url:target.url,authentication:'none'}:null;}\n\tfunction manifestRunRequest(targetId,probe){\n\t const target=deploymentTargets.find(t=>t.id===targetId),m=probe?.body;\n\t if(!target||probe.status!==200||!m||typeof m!=='object'||Array.isArray(m)||Object.keys(m).some(k=>!fields.includes(k))||m.schemaVersion!==1||m.available!==true||m.component!==target.component||m.repository!==repository||!sha(m.commit)||!positive(m.runId)||!positive(m.runAttempt)||!Number.isFinite(time(m.builtAt)))return null;\n\t return {targetId,runId:m.runId,attempt:m.runAttempt,url:`https://api.github.com/repos/${repository}/actions/runs/${m.runId}/attempts/${m.runAttempt}`,authentication:'github'};\n\t}\n\tfunction verifyDeployment({targetId,expectedCommit,mergedAt,probe,run,observedAt},clock=Date.now()){\n\t const target=deploymentTargets.find(t=>t.id===targetId);\n\t const result={verified:false,targetId,environment:target?.environment||null,observedAt,commit:null};\n\t const reject=error=>({...result,error});\n\t if(!target||!sha(expectedCommit)||!Number.isFinite(time(mergedAt)))return reject('Expected merged revision or deployment target is invalid');\n\t if(!Number.isFinite(time(observedAt))||time(observedAt)>clock+60000||time(observedAt)<clock-600000)return reject('Deployment observation is stale or invalid');\n\t const request=manifestRunRequest(targetId,probe);\n\t if(!request)return reject('Served revision manifest is unavailable or invalid');\n\t const m=probe.body;\n\t if(m.commit!==expectedCommit)return reject('Environment is not serving the expected merged revision');\n\t const r=run?.body;\n\t if(run?.status!==200||r?.id!==m.runId||r?.run_attempt!==m.runAttempt||r?.workflow_id!==target.workflowId||r?.repository?.full_name!==repository||r?.head_sha!==expectedCommit||r?.head_branch!=='main'||!['push','workflow_dispatch'].includes(r?.event))return reject('GitHub run does not match the served build and target');\n\t if(r.status!=='completed'||r.conclusion!=='success')return reject('Matching deployment run has not succeeded');\n\t const started=time(r.run_started_at),completed=time(r.updated_at),built=time(m.builtAt),observed=time(observedAt),merged=time(mergedAt);\n\t // Small clock allowance only for timestamp ordering, never for commit identity.\n\t if(![started,completed,built].every(Number.isFinite)||started<merged-60000||completed<started||built<started-60000||built>completed+60000||completed>observed+60000)return reject('Build and deployment timestamps are inconsistent');\n\t return {...result,verified:true,commit:expectedCommit,repository,runId:m.runId,runAttempt:m.runAttempt,workflowId:target.workflowId,builtAt:m.builtAt,deployedAt:r.updated_at,url:target.url,runUrl:`https://github.com/${repository}/actions/runs/${m.runId}/attempts/${m.runAttempt}`,error:null};\n\t}\n\n\texports.deploymentProbe = deploymentProbe;\n\texports.deploymentTargets = deploymentTargets;\n\texports.manifestRunRequest = manifestRunRequest;\n\texports.verifyDeployment = verifyDeployment;\n\n\treturn exports;\n\n})({});\n\nif($json.status!==200)throw Error('Deployment target store unavailable');return $json.body.targets.map(t=>{const p=Deployment.deploymentProbe(t.targetId);if(!p)throw Error('Unknown target');return {json:{...t,url:p.url}};});"
+      },
+      "typeVersion": 2,
+      "position": [
+        780,
+        0
+      ]
+    },
+    {
+      "id": "read-served-revision",
+      "name": "Read served revision",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cache-Control",
+              "value": "no-cache"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000,
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "typeVersion": 4.2,
+      "position": [
+        1040,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "prepare-run-checks",
+      "name": "Prepare run checks",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "var Deployment = (function (exports) {\n\t'use strict';\n\n\t// Read-only revision evidence. Fixed targets prevent client-controlled network destinations.\n\tconst deploymentTargets=Object.freeze([\n\t {id:'production_frontend',component:'frontend',workflowId:354029928,environment:'Azure Static Web Apps',url:'https://victorious-flower-0f10a8303.6.azurestaticapps.net/build-info.json'},\n\t {id:'production_backend',component:'backend',workflowId:390689734,environment:'Azure App Service',url:'https://meids-prod-backend-1853a19b.azurewebsites.net/api/build-info'},\n\t {id:'sandbox_frontend',component:'frontend',workflowId:328868831,environment:'GitHub Pages',url:'https://florianliepe.github.io/meids-app/build-info.json'}\n\t].map(Object.freeze));\n\tconst repository='florianliepe/meids-app';\n\tconst sha=v=>typeof v==='string'&&/^[a-f0-9]{40}$/.test(v);\n\tconst positive=v=>Number.isSafeInteger(v)&&v>0;\n\tconst time=v=>typeof v==='string'&&Number.isFinite(Date.parse(v))?Date.parse(v):NaN;\n\tconst fields=['schemaVersion','available','component','repository','commit','runId','runAttempt','builtAt'];\n\tfunction deploymentProbe(targetId){const target=deploymentTargets.find(t=>t.id===targetId);return target?{targetId,url:target.url,authentication:'none'}:null;}\n\tfunction manifestRunRequest(targetId,probe){\n\t const target=deploymentTargets.find(t=>t.id===targetId),m=probe?.body;\n\t if(!target||probe.status!==200||!m||typeof m!=='object'||Array.isArray(m)||Object.keys(m).some(k=>!fields.includes(k))||m.schemaVersion!==1||m.available!==true||m.component!==target.component||m.repository!==repository||!sha(m.commit)||!positive(m.runId)||!positive(m.runAttempt)||!Number.isFinite(time(m.builtAt)))return null;\n\t return {targetId,runId:m.runId,attempt:m.runAttempt,url:`https://api.github.com/repos/${repository}/actions/runs/${m.runId}/attempts/${m.runAttempt}`,authentication:'github'};\n\t}\n\tfunction verifyDeployment({targetId,expectedCommit,mergedAt,probe,run,observedAt},clock=Date.now()){\n\t const target=deploymentTargets.find(t=>t.id===targetId);\n\t const result={verified:false,targetId,environment:target?.environment||null,observedAt,commit:null};\n\t const reject=error=>({...result,error});\n\t if(!target||!sha(expectedCommit)||!Number.isFinite(time(mergedAt)))return reject('Expected merged revision or deployment target is invalid');\n\t if(!Number.isFinite(time(observedAt))||time(observedAt)>clock+60000||time(observedAt)<clock-600000)return reject('Deployment observation is stale or invalid');\n\t const request=manifestRunRequest(targetId,probe);\n\t if(!request)return reject('Served revision manifest is unavailable or invalid');\n\t const m=probe.body;\n\t if(m.commit!==expectedCommit)return reject('Environment is not serving the expected merged revision');\n\t const r=run?.body;\n\t if(run?.status!==200||r?.id!==m.runId||r?.run_attempt!==m.runAttempt||r?.workflow_id!==target.workflowId||r?.repository?.full_name!==repository||r?.head_sha!==expectedCommit||r?.head_branch!=='main'||!['push','workflow_dispatch'].includes(r?.event))return reject('GitHub run does not match the served build and target');\n\t if(r.status!=='completed'||r.conclusion!=='success')return reject('Matching deployment run has not succeeded');\n\t const started=time(r.run_started_at),completed=time(r.updated_at),built=time(m.builtAt),observed=time(observedAt),merged=time(mergedAt);\n\t // Small clock allowance only for timestamp ordering, never for commit identity.\n\t if(![started,completed,built].every(Number.isFinite)||started<merged-60000||completed<started||built<started-60000||built>completed+60000||completed>observed+60000)return reject('Build and deployment timestamps are inconsistent');\n\t return {...result,verified:true,commit:expectedCommit,repository,runId:m.runId,runAttempt:m.runAttempt,workflowId:target.workflowId,builtAt:m.builtAt,deployedAt:r.updated_at,url:target.url,runUrl:`https://github.com/${repository}/actions/runs/${m.runId}/attempts/${m.runAttempt}`,error:null};\n\t}\n\n\texports.deploymentProbe = deploymentProbe;\n\texports.deploymentTargets = deploymentTargets;\n\texports.manifestRunRequest = manifestRunRequest;\n\texports.verifyDeployment = verifyDeployment;\n\n\treturn exports;\n\n})({});\n\nconst refs=$('Prepare probes').all();if(refs.length!==$input.all().length)throw Error('Probe response count mismatch');return $input.all().map((x,i)=>{let body={};const text=x.json.body;if(typeof text==='string'&&text.length<=4096){try{body=JSON.parse(text);}catch{}}const probe={status:x.json.statusCode||0,body};const ref=refs[i].json;const check=Deployment.manifestRunRequest(ref.targetId,probe);return {json:{...ref,probe,validManifest:!!check,url:check?.url||'https://api.github.com/repos/florianliepe/meids-app'}};});"
+      },
+      "typeVersion": 2,
+      "position": [
+        0,
+        240
+      ]
+    },
+    {
+      "id": "read-matching-github-run",
+      "name": "Read matching GitHub run",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000,
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "typeVersion": 4.2,
+      "position": [
+        260,
+        240
+      ],
+      "credentials": {
+        "githubApi": {
+          "id": "3V46mglu7fpoPISX",
+          "name": "GitHub account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "prepare-observations",
+      "name": "Prepare observations",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "const refs=$('Prepare run checks').all();if(refs.length!==$input.all().length)throw Error('Run response count mismatch');const results=$input.all().map((x,i)=>{const {url,validManifest,...r}=refs[i].json;const b=x.json.body||{};const body=Object.fromEntries(['id','run_attempt','workflow_id','head_sha','head_branch','event','status','conclusion','run_started_at','updated_at'].map(k=>[k,b[k]]));body.repository={full_name:b.repository?.full_name};return {...r,run:{status:validManifest?(x.json.statusCode||0):0,body}};});return [{json:{observedAt:new Date().toISOString(),results}}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        520,
+        240
+      ]
+    },
+    {
+      "id": "save-observations",
+      "name": "Save observations",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "KblOJCQpInwzyg1a"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "path": "/automation/deployments/complete",
+            "method": "POST",
+            "body": "={{ $json }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "typeVersion": 1.2,
+      "position": [
+        780,
+        240
+      ]
+    },
+    {
+      "id": "check-save",
+      "name": "Check save",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "if($json.status!==200)throw Error('Deployment observation was not saved');return [{json:{applied:$json.body.applied}}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        1040,
+        240
+      ]
+    }
+  ],
+  "connections": {
+    "Every five minutes": {
+      "main": [
+        [
+          {
+            "node": "Get targets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Internal trigger": {
+      "main": [
+        [
+          {
+            "node": "Get targets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get targets": {
+      "main": [
+        [
+          {
+            "node": "Prepare probes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare probes": {
+      "main": [
+        [
+          {
+            "node": "Read served revision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read served revision": {
+      "main": [
+        [
+          {
+            "node": "Prepare run checks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare run checks": {
+      "main": [
+        [
+          {
+            "node": "Read matching GitHub run",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read matching GitHub run": {
+      "main": [
+        [
+          {
+            "node": "Prepare observations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare observations": {
+      "main": [
+        [
+          {
+            "node": "Save observations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save observations": {
+      "main": [
+        [
+          {
+            "node": "Check save",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": false,
+    "callerPolicy": "workflowsFromSameOwner",
+    "executionTimeout": 240
+  }
+}

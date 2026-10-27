@@ -30,3 +30,13 @@ test('quality automation is internal-only and keeps model calls outside the stor
   assert.equal(worker.nodes.find(n=>n.name==='Claim job').parameters.options.waitForSubWorkflow,true);
   assert.equal(worker.nodes.find(n=>n.name==='Save drafts').parameters.workflowInputs.value.path,'/automation/complete');
 });
+
+test('delivery bridge requires a separate machine credential and forces project scope',()=>{
+ const w=JSON.parse(readFileSync(new URL('../workflows/delivery-worker.json',import.meta.url),'utf8'));
+ assert.equal(w.settings.saveDataErrorExecution,'none');assert.equal(w.settings.saveDataSuccessExecution,'none');assert.equal(w.settings.saveManualExecutions,false);
+ const hook=w.nodes.find(n=>n.name==='Worker request');assert.equal(hook.parameters.authentication,'headerAuth');assert.ok(hook.credentials.httpHeaderAuth.id);
+ const scope=w.nodes.find(n=>n.name==='Scope request').parameters.jsCode;assert.match(scope,/projectId:'3daa1c59-cd24-487b-a8e4-dc5d930e41f0'/);assert.match(scope,/Browser access is not supported/);
+ assert.equal(w.nodes.find(n=>n.name==='Authorize request').parameters.options.waitForSubWorkflow,true);
+ assert.match(w.nodes.find(n=>n.name==='Load private screenshot').parameters.url,/repos\/florianliepe\/Pandora-data\/git\/blobs/);
+ assert.equal(w.nodes.find(n=>n.name==='Respond').parameters.options.responseHeaders.entries[0].value,'no-store');
+});

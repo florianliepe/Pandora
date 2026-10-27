@@ -1,3 +1,4 @@
+import {pendingPulls,pullRequests,observePulls} from './delivery-observations.mjs';
 // Fixed, reviewed read-only sources. No client-provided URLs or arbitrary repositories.
 export const repositories=['florianliepe/meids-app','florianliepe/meids-agent-configs'];
 export const workflows=[
@@ -13,8 +14,8 @@ const date=v=>typeof v==='string'&&Number.isFinite(Date.parse(v))?new Date(v).to
 const conclusion=v=>['success','failure','cancelled','skipped','neutral','timed_out','action_required','stale','startup_failure'].includes(v)?v:'unknown';
 export function initialRequests(){return [...repositories.map(repository=>({kind:'head',repository,url:`https://api.github.com/repos/${repository}/commits/main`})),...workflows.map(w=>({kind:'runs',repository:repositories[0],workflowId:w.id,url:`https://api.github.com/repos/${repositories[0]}/actions/workflows/${w.id}/runs?branch=main&per_page=3`}))];}
 export function validRuns(r){return (Array.isArray(r.body?.workflow_runs)?r.body.workflow_runs:[]).filter(x=>number(x.id)&&x.workflow_id===r.workflowId&&x.head_branch==='main'&&sha(x.head_sha)&&x.repository?.full_name===repositories[0]).slice(0,3);}
-export function detailRequests(results){
- const requests=[];
+export function detailRequests(results,refs=[]){
+ const requests=pullRequests(refs);
  for(const r of results){if(r.status!==200)continue;
   if(r.kind==='head'&&r.repository===repositories[0]&&sha(r.body?.sha))requests.push({kind:'uat',repository:r.repository,sourceCommit:r.body.sha,url:`https://api.github.com/repos/${r.repository}/contents/${uatPath}?ref=${r.body.sha}`});
   if(r.kind==='runs')for(const run of validRuns(r))requests.push({kind:'jobs',repository:r.repository,runId:run.id,attempt:run.run_attempt||1,url:`https://api.github.com/repos/${r.repository}/actions/runs/${run.id}/attempts/${run.run_attempt||1}/jobs?per_page=100`});
@@ -43,13 +44,13 @@ export function normalizeEvidence(initial,details,observedAt){
 export function pipelineWorker(s,request){
  const err=(status,message)=>{throw Object.assign(Error(message),{status});};
  if(request.method!=='POST')err(405,'Internal worker requires POST');
- if(request.path==='/automation/pipelines/targets')return {targets:s.projects.filter(p=>!p.deletedAt&&p.pipelineConnection?.enabled).slice(0,10).map(p=>({projectId:p.id,revision:p.pipelineConnection.revision})),observedAt:new Date().toISOString()};
+ if(request.path==='/automation/pipelines/targets')return {pulls:pendingPulls(s),targets:s.projects.filter(p=>!p.deletedAt&&p.pipelineConnection?.enabled).slice(0,10).map(p=>({projectId:p.id,revision:p.pipelineConnection.revision})),observedAt:new Date().toISOString()};
  if(request.path!=='/automation/pipelines/complete')err(404,'Unknown pipeline operation');
- const b=request.body||{};if(!Array.isArray(b.initial)||!Array.isArray(b.details)||b.initial.length>5||b.details.length>10||!Array.isArray(b.targets)||b.targets.length>10||!date(b.observedAt)||Date.parse(b.observedAt)>Date.now()+60000||Date.parse(b.observedAt)<Date.now()-600000)err(400,'Invalid pipeline observation');
+ const b=request.body||{};if(!Array.isArray(b.initial)||!Array.isArray(b.details)||b.initial.length>5||b.details.length>20||!Array.isArray(b.targets)||b.targets.length>10||!date(b.observedAt)||Date.parse(b.observedAt)>Date.now()+60000||Date.parse(b.observedAt)<Date.now()-600000)err(400,'Invalid pipeline observation');
  const snapshot=normalizeEvidence(b.initial,b.details,b.observedAt);if(JSON.stringify(snapshot).length>90000)err(413,'Pipeline evidence exceeds capacity');
  let applied=0;for(const target of b.targets){const p=s.projects.find(p=>p.id===target.projectId&&!p.deletedAt&&p.pipelineConnection?.enabled&&p.pipelineConnection.revision===target.revision);if(!p||p.pipelineEvidence?.observedAt>=b.observedAt)continue;
  // Keep last successful evidence on partial outages, explicitly mark it stale.
  const previous=p.pipelineEvidence;const unavailable=new Set(workflows.filter(w=>!b.initial.some(r=>r.kind==='runs'&&r.workflowId===w.id&&r.status===200)).map(w=>w.id));
  p.pipelineEvidence={...snapshot,runs:[...snapshot.runs,...(previous?.runs||[]).filter(r=>unavailable.has(r.workflowId)).map(r=>({...r,stale:true}))],uat:snapshot.uat||(previous?.uat?{...previous.uat,stale:true}:null)};applied++;}
- return {applied};
+ const pullsApplied=observePulls(s,b.details,b.observedAt);return {applied,pullsApplied};
 }

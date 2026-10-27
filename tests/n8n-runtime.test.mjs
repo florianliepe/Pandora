@@ -53,3 +53,10 @@ test('bundled n8n runtime keeps authentication out of Git and enforces access',a
   assert.equal((await call('/auth/logout','POST',{},token)).response.status,200);
   assert.equal((await call('/projects','GET',null,token)).response.status,401);
 });
+
+test('bundled worker errors remain explicit and do not mutate private state',async()=>{
+ const snapshot=fresh(),before=JSON.stringify(snapshot),body={projectId:'11111111-1111-4111-8111-111111111111',workerId:'codex-local',jobId:'22222222-2222-4222-8222-222222222222',claimId:'33333333-3333-4333-8333-333333333333',token:'a'.repeat(64)};
+ const denied=await execute(snapshot,{}, {path:'/automation/delivery/renew',method:'POST',body},{internalWorker:true});
+ assert.equal(denied.response.status,403);assert.equal(denied.writeGit,false);assert.equal(JSON.stringify(snapshot),before);
+ const invalid=await execute(snapshot,{}, {path:'/automation/delivery/renew',method:'POST',body:{}},{internalWorker:true});assert.equal(invalid.response.status,400);assert.equal(invalid.writeGit,false);
+});

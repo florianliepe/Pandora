@@ -1,0 +1,259 @@
+{
+  "name": "Pandora | scoped Codex delivery worker",
+  "nodes": [
+    {
+      "id": "worker-request",
+      "name": "Worker request",
+      "type": "n8n-nodes-base.webhook",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "pandora-delivery-worker-v1",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "pandora-delivery-worker-v1",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "NIazUO7wPkCm6cMP",
+          "name": "Pandora delivery worker (Intellectual Twin)"
+        }
+      }
+    },
+    {
+      "id": "scope-request",
+      "name": "Scope request",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "const input=$json;if(input.headers?.origin)throw Error('Browser access is not supported');const b=typeof input.body==='string'?JSON.parse(input.body):input.body;if(!b||!['claim','renew','evidence','report','finish'].includes(b.action)||JSON.stringify(b).length>100000)throw Error('Invalid worker action');return [{json:{path:'/automation/delivery/'+b.action,method:'POST',body:{...(b.body||{}),projectId:'3daa1c59-cd24-487b-a8e4-dc5d930e41f0',workerId:'codex-local'}}}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        280,
+        0
+      ]
+    },
+    {
+      "id": "authorize-request",
+      "name": "Authorize request",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "KblOJCQpInwzyg1a"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "path": "={{ $json.path }}",
+            "method": "POST",
+            "body": "={{ $json.body }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "typeVersion": 1.2,
+      "position": [
+        560,
+        0
+      ]
+    },
+    {
+      "id": "read-screenshot",
+      "name": "Read screenshot",
+      "type": "n8n-nodes-base.if",
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "file",
+              "leftValue": "={{ $json.status === 200 && !!$json.body?.evidence }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "typeVersion": 2.2,
+      "position": [
+        840,
+        0
+      ]
+    },
+    {
+      "id": "load-private-screenshot",
+      "name": "Load private screenshot",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "url": "=https://api.github.com/repos/florianliepe/Pandora-data/git/blobs/{{ $json.body.evidence.sha }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "options": {
+          "timeout": 20000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        250
+      ],
+      "credentials": {
+        "githubApi": {
+          "id": "3V46mglu7fpoPISX",
+          "name": "GitHub account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "screenshot-response",
+      "name": "Screenshot response",
+      "type": "n8n-nodes-base.code",
+      "parameters": {
+        "jsCode": "const e=$('Authorize request').first().json.body.evidence,b=$json.body;if($json.statusCode!==200||b?.sha!==e.sha||b.size>5*1024*1024||typeof b.content!=='string')return [{json:{status:502,body:{error:'Pinned screenshot could not be retrieved'}}}];return [{json:{status:200,body:{file:{name:e.name,type:e.type,data:b.content,sha:e.sha}}}}];"
+      },
+      "typeVersion": 2,
+      "position": [
+        280,
+        250
+      ]
+    },
+    {
+      "id": "respond",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      },
+      "typeVersion": 1.4,
+      "position": [
+        560,
+        250
+      ]
+    }
+  ],
+  "connections": {
+    "Worker request": {
+      "main": [
+        [
+          {
+            "node": "Scope request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scope request": {
+      "main": [
+        [
+          {
+            "node": "Authorize request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Authorize request": {
+      "main": [
+        [
+          {
+            "node": "Read screenshot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read screenshot": {
+      "main": [
+        [
+          {
+            "node": "Load private screenshot",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load private screenshot": {
+      "main": [
+        [
+          {
+            "node": "Screenshot response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Screenshot response": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "none",
+    "saveManualExecutions": false,
+    "executionTimeout": 150
+  }
+}

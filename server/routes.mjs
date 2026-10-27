@@ -1,3 +1,6 @@
+import {selectDeploymentTargets} from './deployment-worker.mjs';
+import {queueDelivery,queueVerification,decideDelivery,deliveryClosureGate,reopenIssueDeliveries} from './delivery-worker.mjs';
+import {prepareDelivery,deliveryContext,cancelDelivery,publicJob,requestPullLink} from './delivery.mjs';
 import {queueTests,evidenceFields,derivedTestStatus,syncTestStatuses,cadenceSchema,ensureIterations,iterationSuggestion} from './quality.mjs';
 import {createHash,randomBytes,randomInt,timingSafeEqual} from 'node:crypto';
 import {z} from 'zod/v3';
@@ -46,6 +49,7 @@ const mailReady=!!deliverMail;
     const s=await store.read(),p=req.params.projectId;const m=member(s,p,req.user.id);
     const data={project:s.projects.find(x=>x.id===p),role:m.role,members:s.members.filter(x=>x.projectId===p).map(x=>({...x,user:s.users.find(u=>u.id===x.userId)})),metrics:metrics(s,p),preferences:s.preferences.find(x=>x.projectId===p&&x.userId===req.user.id)||{muted:false}};
     for(const key of ['issues','iterations','cases','runs','events'])data[key]=s[key].filter(x=>x.projectId===p&&!x.deletedAt);
+    data.deliveries=(s.deliveries||[]).filter(j=>j.projectId===p).map(j=>publicJob(s,j));
     data.attachments=s.attachments.filter(x=>x.projectId===p&&!x.deletedAt).map(({data,...x})=>x);
     for(const issue of data.issues){issue.testStatus=derivedTestStatus(s,issue);issue.iterationSuggestion=iterationSuggestion(s,issue);}
     data.notifications=s.notifications.filter(x=>x.projectId===p&&x.userId===req.user.id);
@@ -61,6 +65,14 @@ const mailReady=!!deliverMail;
     await store.change(s=>{const p=req.params.projectId;permit(s,p,req.user.id,['owner']);let u=s.users.find(u=>u.email===email);if(!u){u={id:id(),email,name:email.split('@')[0].replaceAll('.',' '),createdAt:now()};s.users.push(u);}const m=s.members.find(m=>m.projectId===p&&m.userId===u.id);if(m?.role==='owner'&&role!=='owner'&&s.members.filter(x=>x.projectId===p&&x.role==='owner').length===1)fail(400,'Keep at least one project owner');if(m)m.role=role;else s.members.push({projectId:p,userId:u.id,role});audit(s,p,req.user.id,'member.updated',u.id,null,{email,role});});res.json({ok:true});
   });
   app.delete('/api/projects/:projectId/members/:userId',async(req,res)=>{await store.change(s=>{const p=req.params.projectId;permit(s,p,req.user.id,['owner']);const m=s.members.find(m=>m.projectId===p&&m.userId===req.params.userId);if(!m)fail(404,'Member not found');if(m.role==='owner'&&s.members.filter(m=>m.projectId===p&&m.role==='owner').length===1)fail(400,'Keep at least one owner');s.members=s.members.filter(x=>x!==m);audit(s,p,req.user.id,'member.removed',m.userId);});res.json({ok:true});});
+  app.post('/api/projects/:projectId/issues/:id/deliveries',async(req,res)=>{const result=await store.change(s=>prepareDelivery(s,req.params.projectId,req.params.id,req.user.id,req.body));res.status(201).json(result);});
+  app.post('/api/projects/:projectId/deliveries/:id/queue',async(req,res)=>{const {version}=z.object({version:z.number().int().positive()}).strict().parse(req.body);res.json(await store.change(s=>queueDelivery(s,req.params.projectId,req.params.id,req.user.id,version)));});
+  app.put('/api/projects/:projectId/deliveries/:id/targets',async(req,res)=>res.json(await store.change(s=>selectDeploymentTargets(s,req.params.projectId,req.params.id,req.user.id,req.body))));
+  app.post('/api/projects/:projectId/deliveries/:id/verification',async(req,res)=>{const {version}=z.object({version:z.number().int().positive()}).strict().parse(req.body);res.json(await store.change(s=>queueVerification(s,req.params.projectId,req.params.id,req.user.id,version)));});
+  app.post('/api/projects/:projectId/deliveries/:id/decision',async(req,res)=>res.json(await store.change(s=>decideDelivery(s,req.params.projectId,req.params.id,req.user.id,req.body))));
+  app.put('/api/projects/:projectId/deliveries/:id/pull',async(req,res)=>res.json(await store.change(s=>requestPullLink(s,req.params.projectId,req.params.id,req.user.id,req.body))));
+  app.get('/api/projects/:projectId/deliveries/:id/context',async(req,res)=>{const s=await store.read();res.json(deliveryContext(s,req.params.projectId,req.params.id,req.user.id));});
+  app.post('/api/projects/:projectId/deliveries/:id/cancel',async(req,res)=>{const {version}=z.object({version:z.number().int().positive()}).strict().parse(req.body);res.json(await store.change(s=>cancelDelivery(s,req.params.projectId,req.params.id,req.user.id,version)));});
   app.put('/api/projects/:projectId/pipelines',async(req,res)=>{const input=z.object({enabled:z.boolean(),revision:z.number().int().min(0)}).strict().parse(req.body);await store.change(s=>{const p=req.params.projectId;permit(s,p,req.user.id,['owner']);const project=s.projects.find(x=>x.id===p);if((project.pipelineConnection?.revision||0)!==input.revision)fail(409,'Connection changed; reload before saving');if(input.enabled&&s.projects.filter(x=>!x.deletedAt&&x.pipelineConnection?.enabled&&x.id!==p).length>=10)fail(400,'Pilot connection capacity reached');project.pipelineConnection={preset:'intellectual-twin',enabled:input.enabled,revision:input.revision+1};project.version++;project.updatedAt=now();audit(s,p,req.user.id,'pipelines.connection_updated',p,null,project.pipelineConnection);});res.json({ok:true});});
   app.put('/api/projects/:projectId/cadence',async(req,res)=>{const cadence=cadenceSchema.parse(req.body);await store.change(s=>{const p=req.params.projectId;permit(s,p,req.user.id,['owner']);const project=s.projects.find(x=>x.id===p);project.cadence=cadence;project.version++;project.updatedAt=now();ensureIterations(s,project);audit(s,p,req.user.id,'cadence.updated',p,null,cadence);});res.json({ok:true});});
   app.post('/api/projects/:projectId/issues/:id/generate-tests',async(req,res)=>{await store.change(s=>{const p=req.params.projectId;permit(s,p,req.user.id,contributors);const issue=s.issues.find(i=>i.id===req.params.id&&i.projectId===p&&!i.deletedAt);if(!issue)fail(404,'Issue not found');if(issue.testGeneration?.state==='running'&&issue.testGeneration.lockUntil>Date.now())fail(409,'Generation is already running');const revision=issue.evidenceRevision||1;queueTests(issue);issue.evidenceRevision=revision;issue.testGeneration.revision=revision;audit(s,p,req.user.id,'tests.generation_requested',issue.id);});res.json({ok:true});});
@@ -91,12 +103,17 @@ const mailReady=!!deliverMail;
             if(!graph[item.status].includes(data.status))fail(400,'Invalid status transition');
             if(m.role==='tester'&&!['verified','reopened'].includes(data.status))fail(403,'Tester can verify or reopen issues');
             if(['verified','closed'].includes(data.status)&&!['owner','tester'].includes(m.role))fail(403,'Owner or tester verification required');
+            const hasDelivery=(s.deliveries||[]).some(j=>j.issueId===item.id&&j.projectId===p&&j.state!=='cancelled');
+            if(hasDelivery&&data.status==='verified')fail(409,'Use the delivery acceptance action to verify this issue');
+            const deliveryAccepted=hasDelivery&&data.status==='closed'&&deliveryClosureGate(s,item);
+            if(deliveryAccepted&&evidenceFields.some(k=>data[k]!==item[k]))fail(409,'Save report changes separately and reverify delivery');
             const ready=s.events.filter(e=>e.entityId===item.id&&e.after?.status==='ready_for_test'&&e.before?.status!=='ready_for_test').at(-1)?.at||item.updatedAt;
             const latest=s.runs.filter(r=>r.projectId===p&&r.issueId===item.id&&!r.deletedAt).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt))[0];
-            if(['verified','closed'].includes(data.status)&&(!latest||latest.result!=='passed'||latest.createdAt<ready||derivedTestStatus(s,item)!=='passed'))fail(400,'A passing linked test run after the fix is ready for test is required');
+            if(!deliveryAccepted&&['verified','closed'].includes(data.status)&&(!latest||latest.result!=='passed'||latest.createdAt<ready||derivedTestStatus(s,item)!=='passed'))fail(400,'A passing linked test run after the fix is ready for test is required');
           }
         }
         const before=structuredClone(item);Object.assign(item,data,{version:item.version+1,updatedAt:now()});
+        if(collection==='issues'&&before.status!==item.status&&item.status==='reopened')reopenIssueDeliveries(s,item,req.user.id);
         if(collection==='issues'&&evidenceFields.some(k=>before[k]!==item[k]))queueTests(item);
         if(collection==='cases'){item.manualEdited=true;item.reviewStatus='approved';}
         if(collection==='runs'){const c=s.cases.find(c=>c.id===data.caseId);if(c.issueId&&c.issueId!==data.issueId)fail(400,'Run must reference its test case issue');if(data.caseId!==before.caseId||data.issueId!==before.issueId){item.caseSnapshot=structuredClone(c);item.issueEvidenceRevision=s.issues.find(i=>i.id===data.issueId)?.evidenceRevision||1;}}
