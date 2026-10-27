@@ -73,6 +73,16 @@ test('notifications route to relevant roles and respect mute',async()=>{
 });
 test('audit snapshots are immutable; metrics do not invent DORA',async()=>{const d=(await call(path(),'GET',null,owner.token)).data;assert.equal(d.events.find(e=>e.entityId===issue.id&&e.action==='issues.created').after.status,'reported');assert.equal(d.metrics.closed,1);assert.equal(d.metrics.dora,null);assert.equal(d.metrics.throughput30d,1);});
 test('unconfigured agent and merge policy fail explicitly',async()=>{assert.equal((await call(path()+'/chat','POST',{message:'Fix all issues'},owner.token)).status,503);assert.equal((await call(path(),'PUT',{...schemas.projects.strip().parse(project),mergePolicy:'agentic',version:project.version},owner.token)).status,409);});
+test('aggregate tests enforce membership and cadence configuration requires ownership',async()=>{
+  assert.ok((await call('/tests','GET',null,owner.token)).data.cases.some(c=>c.projectId===project.id));
+  assert.deepEqual((await call('/tests','GET',null,outsider.token)).data.cases,[]);
+  const config={enabled:true,startDate:'2026-10-27',lengthDays:14,lookahead:3};
+  assert.equal((await call(path()+'/cadence','PUT',config,developer.token)).status,403);
+  assert.equal((await call(path()+'/cadence','PUT',config,owner.token)).status,200);
+  const first=(await call(path(),'GET',null,owner.token)).data.iterations.length;
+  assert.equal((await call(path()+'/cadence','PUT',config,owner.token)).status,200);
+  assert.equal((await call(path(),'GET',null,owner.token)).data.iterations.length,first);
+});
 test('cross-origin requests rejected and logout revokes token',async()=>{const r=await fetch(origin+'/api/projects',{headers:{Origin:'https://evil.test',Authorization:`Bearer ${owner.token}`}});assert.equal(r.status,403);assert.equal((await call('/auth/logout','POST',{},outsider.token)).status,200);assert.equal((await call('/projects','GET',null,outsider.token)).status,401);});
 test('project archiving hides records and preserves audit history',async()=>{assert.equal((await call(path(),'DELETE',null,developer.token)).status,403);assert.equal((await call(path(),'DELETE',null,owner.token)).status,200);assert.equal((await call(path(),'GET',null,owner.token)).status,404);assert.ok((await store.read()).events.some(e=>e.action==='project.archived'));});
 

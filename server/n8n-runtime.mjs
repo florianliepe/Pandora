@@ -1,3 +1,4 @@
+import {workerRequest} from './quality.mjs';
 import {registerRoutes} from './routes.mjs';
 import {createRouter} from './router.mjs';
 export async function applyRequest({snapshot,auth,request,config={}}){
@@ -12,7 +13,7 @@ export async function applyRequest({snapshot,auth,request,config={}}){
   const app=createRouter();registerRoutes(app,{store,env:{STORAGE_KIND:'github-private-repository'},blobs,
     deliverMail:config.mailReady?async({email,code})=>{pendingMail={to:email,code,purpose:'pandora_login',expiresInMinutes:10};}:null,
     chat:config.agentReady?async body=>{pendingChat=body;return {reply:''};}:null});
-  const r=await app.dispatch({method:request.method||'GET',path:'/api'+request.path,body:request.body||{},headers:{authorization:request.token?`Bearer ${request.token}`:''}});
+  const r=config.internalWorker?{status:200,contentType:'application/json',body:workerRequest(state,request)}:await app.dispatch({method:request.method||'GET',path:'/api'+request.path,body:request.body||{},headers:{authorization:request.token?`Bearer ${request.token}`:''}});
   const response={status:r.status,body:r.body};
   let download=null;
   if(r.contentType!=='application/json'&&r.body?.attachmentId){const a=state.attachments.find(a=>a.id===r.body.attachmentId);download={sha:a.blobSha,name:a.name,type:a.type};response.body={};}

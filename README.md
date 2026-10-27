@@ -96,3 +96,12 @@ sessionStorage; SSO and stronger session management are planned separately.
 
 See [deployment](docs/deployment.md), [research](docs/research.md) and
 [integration contract](docs/phase-two.md).
+
+## Issue-driven automation
+
+Screenshots, mitigation, generated test drafts and execution results are grouped
+inside each issue. n8n automatically derives draft tests from report text and
+private screenshots, preserving manual edits and test history. Test status comes
+from current execution evidence. Configure an iteration cadence once and review
+suggested assignments. See [issue-driven quality](docs/issue-driven-quality.md)
+for behavior, workflow IDs, safeguards, limits and validation.
