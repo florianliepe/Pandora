@@ -13,7 +13,7 @@ export function createApp({store,env=process.env,deliverMail}={}){
   const app=express();const origins=(env.PUBLIC_ORIGIN||'http://127.0.0.1:4173').split(',');
   const localMailbox=env.DEV_MAILBOX==='true'&&env.NODE_ENV!=='production'&&['127.0.0.1','localhost'].includes(env.HOST||'127.0.0.1');
   if(!deliverMail&&localMailbox)deliverMail=async({email,code})=>{const dir=env.DATA_DIR||'.local';await mkdir(dir,{recursive:true});await writeFile(join(dir,'mailbox.json'),JSON.stringify({email,code}));};
-  if(!deliverMail&&env.SMTP_URL&&env.MAIL_FROM)deliverMail=async({email,code})=>nodemailer.createTransport(env.SMTP_URL).sendMail({from:env.MAIL_FROM,to:email,subject:'Your Pandora sign-in code',text:`Your code is ${code}. It expires in 10 minutes.`});
+  if(!deliverMail&&env.SMTP_URL&&env.MAIL_FROM)deliverMail=async({email,code,purpose})=>nodemailer.createTransport(env.SMTP_URL).sendMail({from:env.MAIL_FROM,to:email,subject:purpose==='pandora_invitation'?'Pandora project invitation':'Your Pandora account code',text:purpose==='pandora_invitation'?'You have been invited to Pandora. Sign in or set your password at https://florianliepe.github.io/Pandora/':`Your code is ${code}. It expires in 10 minutes.`});
   app.disable('x-powered-by');app.use(helmet({contentSecurityPolicy:{directives:{defaultSrc:["'self'"],scriptSrc:["'self'"],styleSrc:["'self'"],imgSrc:["'self'",'blob:','data:'],connectSrc:["'self'",...origins],objectSrc:["'none'"],upgradeInsecureRequests:null}}}));
   app.use(cors({origin(origin,cb){cb(null,!origin||origins.includes(origin));}}));
   app.use('/api',(req,res,next)=>{res.set('Cache-Control','no-store');if(req.headers.origin&&!origins.includes(req.headers.origin))return res.status(403).json({error:'Origin not allowed'});next();});

@@ -9,6 +9,9 @@ test('email workflow validates exact recipients and hides code from response',()
   assert.equal(run({to:'tester@eraneos.com',code:'12345678',purpose:'pandora_login'})[0].json.to,'tester@eraneos.com');
   for(const to of ['tester@eraneos.com.evil.test','other@example.com','a@eraneos.com,b@example.com','a@eraneos.com\r\nBcc:x@example.com'])assert.throws(()=>run({to,code:'12345678',purpose:'pandora_login'}));
   assert.throws(()=>run({to:'tester@eraneos.com',code:'123',purpose:'pandora_login'}));
+  assert.equal(run({to:'guest@example.com',purpose:'pandora_invitation'})[0].json.to,'guest@example.com');
+  assert.equal(run({to:'guest@example.com',code:'12345678',purpose:'pandora_password'})[0].json.to,'guest@example.com');
+  for(const purpose of ['pandora_password','pandora_invitation'])for(const to of ['a@example.com,b@example.com','a@example.com\r\nBcc:b@example.com'])assert.throws(()=>run({to,code:'12345678',purpose}));
   const ack=workflows.mail.nodes.find(n=>n.name==='Delivery acknowledged').parameters.jsCode;assert.equal(JSON.stringify(vm.runInNewContext(`(function(){${ack}})()`)),'[{"json":{"accepted":true}}]');
 });
 test('workflow drafts require authentication and do not retain execution payloads',()=>{

@@ -19,7 +19,7 @@
       "name": "Validate request",
       "type": "n8n-nodes-base.code",
       "parameters": {
-        "jsCode": "const b=$input.first().json; if(!b || typeof b.to!==\"string\" || !/^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@eraneos\\.com$/i.test(b.to) || !/^\\d{8}$/.test(String(b.code)) || b.purpose!==\"pandora_login\") throw new Error(\"Invalid login email payload\"); return [{json:{to:b.to,code:String(b.code)}}];"
+        "jsCode": "const b=$input.first().json; const kinds=['pandora_login','pandora_password','pandora_invitation']; if(!b || typeof b.to!=='string' || b.to.length>254 || !/^[^\\s@,;<>]+@[^\\s@,;<>]+\\.[^\\s@,;<>]+$/.test(b.to) || !kinds.includes(b.purpose)) throw new Error('Invalid account email payload'); if(b.purpose==='pandora_login' && b.to.split('@')[1].toLowerCase()!=='eraneos.com') throw new Error('Invalid login recipient'); if(b.purpose!=='pandora_invitation' && !/^\\d{8}$/.test(String(b.code))) throw new Error('Invalid account code'); const invitation=b.purpose==='pandora_invitation'; const subject=invitation?'Pandora project invitation':b.purpose==='pandora_password'?'Set or reset your Pandora password':'Your Pandora sign-in code'; const text=invitation?'A project owner has invited you to Pandora. Open https://florianliepe.github.io/Pandora/ and sign in, or choose Set password / register. New guest invitations expire in 7 days.':'Your Pandora '+(b.purpose==='pandora_password'?'password setup/reset':'sign-in')+' code is '+b.code+'. It expires in 10 minutes. If you did not request this, ignore this email.'; return [{json:{to:b.to,subject,text}}];"
       },
       "position": [
         250,
@@ -35,8 +35,8 @@
         "resource": "message",
         "operation": "send",
         "toRecipients": "={{ $json.to }}",
-        "subject": "Your Pandora sign-in code",
-        "bodyContent": "=Your Pandora sign-in code is {{ $json.code }}. It expires in 10 minutes. If you did not request this code, ignore this email.",
+        "subject": "={{ $json.subject }}",
+        "bodyContent": "={{ $json.text }}",
         "additionalFields": {
           "from": "florian.liepe@eraneos.com",
           "bodyContentType": "Text",
@@ -109,6 +109,7 @@
     "saveDataErrorExecution": "none",
     "saveDataSuccessExecution": "none",
     "saveManualExecutions": false,
-    "callerPolicy": "workflowsFromSameOwner"
+    "callerPolicy": "workflowsFromSameOwner",
+    "saveExecutionProgress": false
   }
 }
