@@ -4,6 +4,7 @@ import {prepareDelivery,deliveryContext,cancelDelivery,publicJob,requestPullLink
 import {queueTests,evidenceFields,derivedTestStatus,syncTestStatuses,cadenceSchema,ensureIterations,iterationSuggestion} from './quality.mjs';
 import {createHash,randomBytes,randomInt,timingSafeEqual} from 'node:crypto';
 import {z} from 'zod/v3';
+import {registerPasswordRoutes,accountEmail} from './password-auth.mjs';
 import {id,now,fail,emailSchema,schemas,member,permit,audit,validateRefs,notify,metrics,roles} from './domain.mjs';
 const digest=v=>createHash('sha256').update(v).digest('hex');
 const equal=(a,b)=>a.length===b.length&&timingSafeEqual(Buffer.from(a),Buffer.from(b));
@@ -11,6 +12,7 @@ const editors=['owner','developer'];
 const contributors=['owner','developer','tester'];
 export function registerRoutes(app,{store,env={},deliverMail,blobs=null,chat=null}){
 const mailReady=!!deliverMail;
+  registerPasswordRoutes(app,{store,deliverMail});
   app.get('/api/health',(_req,res)=>res.json({status:'ok',mailReady,storage:env.STORAGE_KIND||'sqlite',agentReady:!!chat}));
 
   app.post('/api/auth/request',async(req,res)=>{
@@ -28,6 +30,8 @@ const mailReady=!!deliverMail;
     const result=await store.change(s=>{
       const c=s.challenges.find(c=>c.id===challengeId);
       if(!c||c.used||c.expires<Date.now()||c.attempts>=5)return null;
+      const existing=s.users.find(u=>u.email===c.email);
+      if((s.passwordCredentials||[]).some(x=>x.userId===existing?.id))return null;
       c.attempts++;
       if(!equal(c.hash,digest(challengeId+code)))return null;
       c.used=true;
@@ -61,8 +65,8 @@ const mailReady=!!deliverMail;
   });
   app.delete('/api/projects/:projectId',async(req,res)=>{await store.change(s=>{const p=req.params.projectId;permit(s,p,req.user.id,['owner']);const item=s.projects.find(x=>x.id===p);item.deletedAt=now();audit(s,p,req.user.id,'project.archived',p);});res.json({ok:true});});
   app.post('/api/projects/:projectId/members',async(req,res)=>{
-    const email=emailSchema.parse(req.body.email),role=z.enum(roles).parse(req.body.role);
-    await store.change(s=>{const p=req.params.projectId;permit(s,p,req.user.id,['owner']);let u=s.users.find(u=>u.email===email);if(!u){u={id:id(),email,name:email.split('@')[0].replaceAll('.',' '),createdAt:now()};s.users.push(u);}const m=s.members.find(m=>m.projectId===p&&m.userId===u.id);if(m?.role==='owner'&&role!=='owner'&&s.members.filter(x=>x.projectId===p&&x.role==='owner').length===1)fail(400,'Keep at least one project owner');if(m)m.role=role;else s.members.push({projectId:p,userId:u.id,role});audit(s,p,req.user.id,'member.updated',u.id,null,{email,role});});res.json({ok:true});
+    const email=accountEmail.parse(req.body.email),role=z.enum(roles).parse(req.body.role);
+    await store.change(s=>{const p=req.params.projectId;permit(s,p,req.user.id,['owner']);let u=s.users.find(u=>u.email===email);if(!u){u={id:id(),email,name:email.split('@')[0].replaceAll('.',' '),createdAt:now()};s.users.push(u);}const m=s.members.find(m=>m.projectId===p&&m.userId===u.id);if(m?.role==='owner'&&role!=='owner'&&s.members.filter(x=>x.projectId===p&&x.role==='owner').length===1)fail(400,'Keep at least one project owner');if(m)m.role=role;else s.members.push({projectId:p,userId:u.id,role});s.accountInvitations=(s.accountInvitations||[]).filter(i=>!(i.email===email&&i.projectId===p));s.accountInvitations.push({email,projectId:p,invitedBy:req.user.id,expires:Date.now()+7*86400000});audit(s,p,req.user.id,'member.updated',u.id,null,{email,role});});if(deliverMail)await deliverMail({email,purpose:'pandora_invitation'});res.json({ok:true});
   });
   app.delete('/api/projects/:projectId/members/:userId',async(req,res)=>{await store.change(s=>{const p=req.params.projectId;permit(s,p,req.user.id,['owner']);const m=s.members.find(m=>m.projectId===p&&m.userId===req.params.userId);if(!m)fail(404,'Member not found');if(m.role==='owner'&&s.members.filter(m=>m.projectId===p&&m.role==='owner').length===1)fail(400,'Keep at least one owner');s.members=s.members.filter(x=>x!==m);audit(s,p,req.user.id,'member.removed',m.userId);});res.json({ok:true});});
   app.post('/api/projects/:projectId/issues/:id/deliveries',async(req,res)=>{const result=await store.change(s=>prepareDelivery(s,req.params.projectId,req.params.id,req.user.id,req.body));res.status(201).json(result);});

@@ -60,3 +60,13 @@ test('bundled worker errors remain explicit and do not mutate private state',asy
  assert.equal(denied.response.status,403);assert.equal(denied.writeGit,false);assert.equal(JSON.stringify(snapshot),before);
  const invalid=await execute(snapshot,{}, {path:'/automation/delivery/renew',method:'POST',body:{}},{internalWorker:true});assert.equal(invalid.response.status,400);assert.equal(invalid.writeGit,false);
 });
+
+test('bundled password KDF works in the n8n sandbox and credentials never enter Git state',async()=>{
+ const requested=await execute(fresh(),{}, {path:'/auth/password/request',method:'POST',body:{email:'bundle@eraneos.com'}},{mailReady:true});
+ const completed=await execute(requested.snapshot,requested.authNext,{path:'/auth/password/complete',method:'POST',body:{challengeId:requested.response.body.challengeId,code:requested.pendingMail.code,password:'Synthetic bundle password 123!'}});
+ assert.equal(completed.response.status,200);
+ const c=completed.authNext.passwordCredentials[0];
+ assert.equal(c.hash,(await import('node:crypto')).scryptSync('Synthetic bundle password 123!',c.salt,32,{N:131072,r:8,p:1,maxmem:256*1024*1024}).toString('hex'));
+ assert.equal('passwordCredentials' in completed.snapshot,false);
+ assert.equal(JSON.stringify(completed.snapshot).includes(c.hash),false);
+});

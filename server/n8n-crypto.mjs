@@ -1,4 +1,12 @@
 import {sha256} from '@noble/hashes/sha256';
+import {scrypt} from '@noble/hashes/scrypt';
+import {HMAC} from '@noble/hashes/hmac';
+// n8n hides prototypes returned by Object.getPrototypeOf. Supply an actual
+// SHA-256 HMAC instance to noble's unchanged state-copy implementation instead.
+// This adapter uses HMAC only through scrypt's SHA-256 PBKDF2 steps.
+const cloneHmac=HMAC.prototype._cloneInto;
+HMAC.prototype._cloneInto=function(to){return cloneHmac.call(this,to||new HMAC(sha256,new Uint8Array()));};
+export function scryptSync(password,salt,length,options){return Buffer.from(scrypt(password,salt,{N:options.N,r:options.r,p:options.p,dkLen:length,maxmem:options.maxmem}));}
 let entropy, counter=0;
 export function setEntropy(hex){if(!/^[0-9a-f]{64,}$/i.test(hex||''))throw new Error('Cryptographic entropy required');entropy=Buffer.from(hex,'hex');counter=0;}
 export function createHash(algorithm){if(algorithm!=='sha256')throw new Error('Unsupported hash');let values=[];return {update(value){values.push(Buffer.from(value));return this;},digest(encoding){return Buffer.from(sha256(new Uint8Array(Buffer.concat(values)))).toString(encoding);}};}
